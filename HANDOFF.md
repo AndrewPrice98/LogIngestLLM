@@ -35,6 +35,9 @@ what to do. It has a local web dashboard and runs on **a model the owner trained
 | `knowledge.py` | offline reference: ATT&CK techniques/tactics, `RULE_ATTACK` (rule → techniques), Windows event IDs, Sysmon, logon types, NTSTATUS codes, Linux message patterns, programs/fields. `STRONG_*` decides which entries are *mapped* vs context-only |
 | `explain.py` | "Explain this event": token highlighting, anatomy, decoded fields, references, `commands()` = native commands per origin OS (verified to run on journald and file sources) |
 | `iocs.py` | indicator extraction (ip with scope, domain with TLD allowlist, url, email, md5/sha1/sha256, user); `Collector` runs on every event during clustering; `from_clusters()` rebuilds approximate ones for old scans |
+| `tools.py` | tool detection: `CATALOG` signatures (attacker / lolbin / scanner / remote-access / tunnel / miner) matched on every event; `boost()` raises scores of tool-bearing patterns; `model_pass()` asks `summary_model` to name the rest and drops anything whose evidence isn't in the log; duplicates of catalog hits become `also` aliases |
+| `logview.py` | jump-to-event: resolves `c/<key>/<i>`, `t/<tool>/<use>`, `i/<ioc>` refs from the saved scan (never client paths) and returns context from files (byte offsets), `.gz` (line numbers), journald cursors (local or over ssh) or Windows record IDs |
+| `labelqueue.py` | label queue: unlabeled patterns across scans, deduped by cluster key, prioritised; labels are saved via `feedback.save()` on the newest scan with the pattern |
 | `engine.py` | scan pipeline; saves `data/scans/<id>.json` (findings + up to 300 lower-scored "others" for training negatives) |
 | `feedback.py` | owner's 👍/👎 + importance labels → `data/feedback.json` (training gold) |
 | `server.py` + `static/index.html` | dashboard on 127.0.0.1:8765; `/api/status` (model health, admin, schedule), scheduled scans (`schedule = "6h"`); `/api/system`, `/api/sources` (GET/POST), `/api/sources/test`, `/api/discover`, `/api/browse`; `/api/scan` takes `specs` (picked files/units) + `summarize` + `label`; `/api/reference`, `/api/explain` (`ask` + `level` = learning/analyst uses `summary_model`), `/api/pivot?type=&value=`. File-browsing endpoints are refused when the dashboard is bound beyond localhost |
@@ -88,14 +91,19 @@ cross-scan pivot and CSV. Scans now store `iocs` and per-cluster `attack`; `engi
 scans. The model's explain brief needs the pattern's indicators and the generated commands as input; without them it
 called a 5-IP brute force "a typo" and invented query syntax.
 
+**Label queue + tools + jump-to-event + citations (2026-11-06, done):** `Event.loc` is set by every parser
+(`Line` str subclass carries line/offset through the text parsers); clusters store `sample_locs`, `first_loc`, `last_loc`;
+scans store `tools`; summary and `/api/ask` answers carry `refs` for `[E#]` citations (`llm.cite_catalog`). Summary prompt
+now forbids lock-yourself-out advice (it once suggested stopping sshd over SSH). Sample intrusion logs in `samples/`.
+
 ## Next steps (priority order)
 
 1. **Portable model export:** merge adapter into base (fp16, on a CUDA box or CPU with enough RAM), convert
    to GGUF Q4_K_M with llama.cpp `convert_hf_to_gguf.py`, create an Ollama model (`Modelfile` with the
    Qwen chat template). Point config at `provider="ollama"`, `model="logagent"`, `mode="triage"`. Add a
    `trainer/export.py` + doc. This removes the CUDA requirement for *using* the model.
-2. **Get owner labels.** The model only gets better than the rules with them. Make labeling faster
-   (keyboard shortcuts j/k/u/n in the findings table, a "label queue" view of unreviewed patterns).
+2. **Get owner labels.** The model only gets better than the rules with them. The label queue (top bar) is built
+   for this; it shows the retrain commands after 25 new labels.
 3. **Retrain loop:** `python -m logagent dataset` → `trainer/train.py` → `trainer/evaluate.py` against the
    previous version; only switch `serve.py` to the new adapter if eval on owner-labeled (`src=you`) rows
    improves. Consider a dashboard "Models" tab showing versions + eval scores.

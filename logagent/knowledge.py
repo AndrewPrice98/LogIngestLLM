@@ -9,8 +9,8 @@ from __future__ import annotations
 import re
 
 # ---------------------------------------------------------------- MITRE ATT&CK (Enterprise)
-TACTICS = [  # matrix order, pre-compromise tactics left out (logs on your own machines don't show them)
-    ("TA0001", "Initial Access"), ("TA0002", "Execution"), ("TA0003", "Persistence"),
+TACTICS = [  # matrix order; Resource Development left out (it happens on the attacker's side)
+    ("TA0043", "Reconnaissance"), ("TA0001", "Initial Access"), ("TA0002", "Execution"), ("TA0003", "Persistence"),
     ("TA0004", "Privilege Escalation"), ("TA0005", "Defense Evasion"), ("TA0006", "Credential Access"),
     ("TA0007", "Discovery"), ("TA0008", "Lateral Movement"), ("TA0009", "Collection"),
     ("TA0011", "Command and Control"), ("TA0010", "Exfiltration"), ("TA0040", "Impact"),
@@ -48,6 +48,18 @@ TECHNIQUES = {  # id: (name, [tactic ids])
     "T1562.001": ("Impair Defenses: Disable or Modify Tools", ["TA0005"]),
     "T1562.002": ("Impair Defenses: Disable Windows Event Logging", ["TA0005"]),
     "T1569.002": ("System Services: Service Execution", ["TA0002"]),
+    "T1047": ("Windows Management Instrumentation", ["TA0002"]),
+    "T1105": ("Ingress Tool Transfer", ["TA0011"]),
+    "T1190": ("Exploit Public-Facing Application", ["TA0001"]),
+    "T1218.005": ("System Binary Proxy Execution: Mshta", ["TA0005"]),
+    "T1218.010": ("System Binary Proxy Execution: Regsvr32", ["TA0005"]),
+    "T1218.011": ("System Binary Proxy Execution: Rundll32", ["TA0005"]),
+    "T1219": ("Remote Access Software", ["TA0011"]),
+    "T1496": ("Resource Hijacking", ["TA0040"]),
+    "T1562.004": ("Impair Defenses: Disable or Modify System Firewall", ["TA0005"]),
+    "T1572": ("Protocol Tunneling", ["TA0011"]),
+    "T1595.002": ("Active Scanning: Vulnerability Scanning", ["TA0043"]),
+    "T1595.003": ("Active Scanning: Wordlist Scanning", ["TA0043"]),
 }
 
 
@@ -326,6 +338,8 @@ PROGRAMS = {
     "su": "switch user", "login": "console login",
     "systemd": "init system: starts/stops services (units)", "systemd-logind": "tracks user logins and sessions",
     "systemd-journald": "the journal itself", "kernel": "the Linux kernel: hardware, drivers, memory, filesystems",
+    "debian-sa1": "sysstat: records CPU/memory/disk statistics every 10 minutes (Debian/Ubuntu)",
+    "sa1": "sysstat: records system activity statistics", "sadc": "sysstat data collector",
     "CRON": "scheduled jobs (cron)", "crond": "scheduled jobs (cron)", "cron": "scheduled jobs (cron)",
     "NetworkManager": "network connections (Wi-Fi, Ethernet, VPN)", "dbus-daemon": "desktop/system message bus",
     "polkitd": "authorises privileged actions for desktop apps", "audit": "Linux audit subsystem",

@@ -29,7 +29,7 @@ from typing import Iterator
 
 from ..model import Event, WARNING, ERR, CRIT, INFO
 from . import windows
-from .textlogs import parse_syslog, parse_journal_json, parse_app_log, is_syslog_line
+from .textlogs import Line, parse_syslog, parse_journal_json, parse_app_log, is_syslog_line
 
 
 class SourceError(RuntimeError):
@@ -66,19 +66,45 @@ def _open_text(path: str):
 
 
 def _read_lines(path: str, warn=print, max_bytes: int = MAX_FILE_BYTES) -> Iterator[str]:
-    """Lines of a text log; a file over max_bytes is read from its last max_bytes (the newest data)."""
+    """Lines of a text log, each a Line carrying its line number and byte offset (gzip: line number only).
+    A file over max_bytes is read from its last max_bytes (the newest data); line numbers are then unknown."""
     if path.endswith(".gz"):
         with _open_text(path) as fh:
-            yield from fh
+            for n, raw in enumerate(fh, 1):
+                ln = Line(raw)
+                ln.ln = n
+                yield ln
         return
     size = os.path.getsize(path)
     with open(path, "rb") as fh:
+        n: int | None = 1
         if size > max_bytes:
             warn(f"{path} is {size / 2**20:.0f} MB; reading the newest {max_bytes / 2**20:.0f} MB only")
             fh.seek(size - max_bytes)
             fh.readline()  # drop the partial first line
-        for raw in fh:
-            yield raw.decode("utf-8", errors="replace")
+            n = None
+        while True:
+            pos = fh.tell()
+            raw = fh.readline()
+            if not raw:
+                break
+            ln = Line(raw.decode("utf-8", errors="replace"))
+            ln.ln, ln.pos = n, pos
+            if n is not None:
+                n += 1
+            yield ln
+
+
+def _drop_cursor(events: Iterator[Event]) -> Iterator[Event]:
+    for e in events:
+        e.loc.pop("cursor", None)
+        yield e
+
+
+def _in_file(events: Iterator[Event], path: str) -> Iterator[Event]:
+    for e in events:
+        e.loc["file"] = path
+        yield e
 
 
 def is_log_file(path: str) -> bool:
@@ -140,15 +166,16 @@ def _collect_file(path: str, fmt: str, host: str, cutoff: datetime, warn, max_ev
         warn(f"skipped {path}: binary file, not a text log")
         return
     if fmt == "evtx":
-        yield from windows.collect(path=path, max_events=max_events, warn=warn)
+        yield from _in_file(windows.collect(path=path, max_events=max_events, warn=warn), path)
         return
     lines = _read_lines(path, warn)
     if fmt == "journal":
-        yield from _since_filter(parse_journal_json(lines, host), cutoff)
+        evs = _drop_cursor(parse_journal_json(lines, host))  # an exported file: point at its lines, not the live journal
     elif fmt == "syslog":
-        yield from _since_filter(parse_syslog(lines, host), cutoff)
+        evs = parse_syslog(lines, host)
     else:
-        yield from _since_filter(parse_app_log(lines, Path(path).name.split(".")[0] or "app", host), cutoff)
+        evs = parse_app_log(lines, Path(path).name.split(".")[0] or "app", host)
+    yield from _since_filter(_in_file(evs, path), cutoff)
 
 
 def _since_filter(events: Iterator[Event], cutoff: datetime) -> Iterator[Event]:
@@ -175,7 +202,7 @@ def collect(spec: dict, window: timedelta, warn=print, max_events: int = 20000) 
     elif kind == "windows":
         yield from windows.collect(spec.get("channels"), since=window, max_events=max_events, warn=warn)
     elif kind == "evtx":
-        yield from windows.collect(path=spec["path"], max_events=max_events, warn=warn)
+        yield from _in_file(windows.collect(path=spec["path"], max_events=max_events, warn=warn), spec["path"])
     elif kind == "journald":
         cmd = ["journalctl", "-o", "json", "--no-pager", "-n", str(max_events)]
         if window < ALL_TIME:
@@ -192,14 +219,14 @@ def collect(spec: dict, window: timedelta, warn=print, max_events: int = 20000) 
         if not files:
             raise SourceError(f"no files match {spec['path']}")
         for f in files:
-            yield from _since_filter(parse_syslog(_read_lines(f, warn), host), cutoff)
+            yield from _since_filter(_in_file(parse_syslog(_read_lines(f, warn), host), f), cutoff)
     elif kind == "app":
         files = _files(spec["path"])
         if not files:
             raise SourceError(f"no files match {spec['path']}")
         name = spec.get("app") or spec.get("name") or Path(files[0]).stem
         for f in files:
-            yield from _since_filter(parse_app_log(_read_lines(f, warn), name, host), cutoff)
+            yield from _since_filter(_in_file(parse_app_log(_read_lines(f, warn), name, host), f), cutoff)
     elif kind == "ssh":
         yield from _collect_ssh(spec, window, cutoff, warn, max_events)
     else:
@@ -267,6 +294,10 @@ def _collect_ssh(spec: dict, window: timedelta, cutoff: datetime, warn, max_even
     for e in evs:
         e.host = label
         e.source = f"{device}:{e.source}"
+        if e.loc.get("cursor"):
+            e.loc["ssh"] = spec.get("name") or spec["host"]
+        else:
+            e.loc = {}  # syslog fallback came through cat | tail: no stable position
         yield e
 
     for pattern in spec.get("logs", []):
@@ -274,6 +305,7 @@ def _collect_ssh(spec: dict, window: timedelta, cutoff: datetime, warn, max_even
                        else f"for f in {pattern}; do tail -n 2000 \"$f\"; done 2>/dev/null")
         for e in _since_filter(parse_app_log(out.splitlines(), Path(pattern).stem.replace("*", "") or "app", label), cutoff):
             e.source = f"{device}:{e.source}"
+            e.loc = {}  # tail output: line numbers are relative, not usable
             yield e
 
     try:

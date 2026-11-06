@@ -70,26 +70,32 @@ class Cluster:
     def rule(self) -> Rule | None:
         return max(self.rules, key=lambda r: r.score) if self.rules else None
 
-    def samples(self, n: int = 3) -> list[str]:
+    def sample_events(self, n: int = 3) -> list[Event]:
         seen, out = set(), []
         for e in sorted(self.events, key=lambda e: e.ts, reverse=True):
             m = e.message[:700]
             if m not in seen:
                 seen.add(m)
-                out.append(m)
+                out.append(e)
             if len(out) >= n:
                 break
         return out
 
+    def samples(self, n: int = 3) -> list[str]:
+        return [e.message[:700] for e in self.sample_events(n)]
+
     def to_dict(self) -> dict:
         r = self.rule
         last = sorted(self.events, key=lambda e: e.ts)[-1]
+        se = self.sample_events()
         return {
             "key": self.key, "host": self.host, "source": self.source, "program": self.program,
             "event_id": self.event_id, "count": self.count, "first": self.first.isoformat(),
             "last": self.last.isoformat(), "severity": SEVERITY_NAMES[self.worst],
             "score": round(self.score, 1), "novel": self.novel, "template": self.template,
-            "samples": self.samples(), "reasons": self.reasons,
+            "samples": [e.message[:700] for e in se], "reasons": self.reasons,
+            "sample_locs": [e.loc or None for e in se],
+            "first_loc": min(self.events, key=lambda e: e.ts).loc or None, "last_loc": last.loc or None,
             "rule": None if not r else {"id": r.id, "title": r.title, "category": r.category,
                                         "why": r.why, "action": r.action},
             "fields": {k: v for k, v in last.fields.items() if v not in (None, "", "-")} if last.fields else {},

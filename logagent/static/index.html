@@ -149,6 +149,32 @@ table.anat td{padding:3px 8px}table.anat td:first-child{white-space:nowrap}
 .tcell:hover{border-color:var(--accent)}
 .pivot{padding:3px 0;font-size:11.5px}
 .patf{padding:6px 18px;border-bottom:1px solid var(--line);background:var(--sel);font-size:11.5px}
+/* ---------- log viewer, tools, citations */
+.logbox{border:1px solid var(--line2);background:var(--bg);font-size:12px}
+.logline{display:grid;grid-template-columns:64px 1fr;border-left:3px solid transparent}
+.logline .ln{color:var(--dim);text-align:right;padding:1px 10px 1px 0;user-select:none;border-right:1px solid var(--line)}
+.logline .lt{padding:1px 10px;white-space:pre-wrap;word-break:break-all}
+.logline.hit{background:var(--sel);border-left-color:var(--accent)}.logline.hit .lt{color:var(--text);font-weight:600}
+.logline.dim{opacity:.35}
+mark{background:var(--med);color:#111}
+.logb{white-space:nowrap}
+.smp{display:flex;gap:6px;align-items:flex-start}.smp pre{flex:1}.smp .logb{margin-top:6px}
+.use{display:grid;grid-template-columns:auto auto auto 1fr;gap:10px;align-items:start;padding:3px 0;font-size:11.5px}
+.use code{white-space:pre-wrap;word-break:break-all;color:var(--muted)}
+.cite{background:var(--accent2);color:var(--text);border:0;border-radius:2px;padding:0 4px;margin:0 1px;font:600 10.5px var(--mono);cursor:pointer;vertical-align:1px}
+.cite:hover{background:var(--accent);color:#031015}
+.sugg{display:flex;flex-wrap:wrap;margin:4px 0 8px}
+/* ---------- label queue */
+.qbar{height:4px;background:var(--line);margin-top:8px}.qbar span{display:block;height:100%;background:var(--ok)}
+.qcard{border:1px solid var(--line2);background:var(--panel)}
+.qtitle{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--line);font:600 15px var(--sans)}
+.qact{display:flex;gap:6px;flex-wrap:wrap;padding:10px 16px;border-top:1px solid var(--line);background:var(--bg2)}
+.qbtn{background:none;border:1px solid var(--line2);color:var(--text);padding:5px 10px;border-radius:2px;cursor:pointer;font-size:12px;display:flex;gap:6px;align-items:center}
+.qbtn:hover{border-color:var(--accent)}.qbtn:disabled{opacity:.4;cursor:default}
+.qbtn.critical{border-color:var(--crit)}.qbtn.high{border-color:var(--high)}.qbtn.medium{border-color:var(--med)}.qbtn.low{border-color:var(--low)}
+.qbtn.ok{border-color:var(--ok);color:var(--ok)}.qbtn.bad{border-color:var(--crit);color:var(--crit)}
+kbd{font:10px var(--mono);border:1px solid var(--line2);border-bottom-width:2px;border-radius:3px;padding:0 4px;color:var(--muted)}
+.keys{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:11.5px;color:var(--muted);border-bottom:1px solid var(--line)}
 /* ---------- log locations */
 .mini{background:none;border:1px solid var(--line2);color:var(--muted);padding:0 6px;cursor:pointer;border-radius:2px;font-size:10px;letter-spacing:.08em;text-transform:uppercase}
 .mini:hover{color:var(--text);border-color:var(--accent)}
@@ -180,7 +206,7 @@ tr.dis td{color:var(--dim)}
   <div>privilege <b id="adm">…</b></div>
   <div>schedule <b id="sch">…</b></div>
   <div class="grow"></div>
-  <div><button id="refBtn" title="What common log events mean (Windows IDs, Linux messages, ATT&CK)">REFERENCE</button><button id="tz" title="Toggle UTC / local time">UTC</button><button id="theme" title="Toggle theme">◐</button></div>
+  <div><button id="qBtn" title="Label patterns fast (keys: j k u n 1-4 z)">LABEL QUEUE</button><button id="refBtn" title="What common log events mean (Windows IDs, Linux messages, ATT&CK)">REFERENCE</button><button id="tz" title="Toggle UTC / local time">UTC</button><button id="theme" title="Toggle theme">◐</button></div>
 </div>
 <div class="wrap">
   <aside>
@@ -265,6 +291,7 @@ async function init() {
   $('#tz').textContent = utc ? 'UTC' : 'LOCAL';
   sys = await api('/api/system');
   if (sys.error) sys = {};
+  api('/api/queue').then(r => { if (!r.error) { Q = Q || r; $('#qBtn').textContent = `LABEL QUEUE ${r.unlabeled}`; } });
   api('/api/reference').then(r => { if (!r.error) { refCat = r; if (current || view !== 'scan') render(); } });
   const cfg = await api('/api/config');
   if (cfg.error) { $('#main').replaceChildren(el('div', {class: 'empty'}, cfg.error)); return; }
@@ -320,6 +347,7 @@ async function loadHistory(openLatest) {
   for (const s of scans) h.append(histItem(s));
   if (location.hash === '#locations') { if (view !== 'locations') openLocations(); return; }
   if (location.hash === '#reference') { view = 'reference'; renderReference(); return; }
+  if (location.hash === '#queue') { if (view !== 'queue') openQueue(); return; }
   if (!scans.length) return;
   const want = location.hash.slice(1) || (openLatest && scans[0].id);
   if (want && (!current || current.id !== want)) await openScan(want);
@@ -331,6 +359,8 @@ async function openScan(id) {
   fb = await api('/api/feedback/' + encodeURIComponent(id));
   if (fb.error) fb = {};
   current = s; openKey = null; view = 'scan'; showAll = !!s.label; patF = null; expl = {}; pivots = {};
+  if (pendingOpenKey) { const k = pendingOpenKey; pendingOpenKey = null; showAll = true; tab = 'findings';
+    const hit = rows().find(r => r.keys.includes(k)); if (hit) { openKey = hit.keys.join(','); setTimeout(scrollOpenRow, 0); } }
   if (pendingPivot) { const i = (s.iocs || []).find(x => x.type === pendingPivot.type && x.value === pendingPivot.value);
     if (i) { patF = {label: `${i.type} ${i.value}`, keys: new Set(i.keys)}; showAll = true; tab = 'findings'; } pendingPivot = null; }
   history.replaceState(null, '', '#' + id);
@@ -371,6 +401,8 @@ function rows() {
 function render() {
   if (view === 'locations') return renderLocations();
   if (view === 'reference') return renderReference();
+  if (view === 'queue') return renderQueue();
+  if (view === 'log') return renderLog();
   if (!current) { $('#main').replaceChildren(el('div', {class: 'empty'}, 'Select sources and run a scan, or open log locations to pick files.')); return; }
   const s = current, a = s.analysis || {}, st = s.stats || {}, meta = a._meta || {};
   const m = $('#main'); m.replaceChildren();
@@ -393,7 +425,7 @@ function render() {
     m.append(el('div', {class: 'sumbox'},
       el('div', {class: 'h'}, el('span', {}, `whole-log summary · ${s.summary.by === 'rules' ? 'rules only' : 'by ' + s.summary.by}`),
         el('span', {title: (o.evidence || []).join('\n')}, `origin ${o.os || '?'}${o.detail ? ' / ' + o.detail : ''} (${o.confidence || '?'} confidence) · viewer ${s.summary.viewer || '?'}`)),
-      el('pre', {}, s.summary.text),
+      el('pre', {}, ...citeText(s.summary.text, s.summary.refs, s.id)),
       s.summary.error ? el('div', {class: 'lbl', style: 'margin-top:6px;color:var(--warn)'}, 'model summary failed, showing rules summary: ' + s.summary.error) : null));
   }
   if (s.llm_error) m.append(el('div', {class: 'alert'}, '⚠ model review failed, fell back to rules: ' + s.llm_error));
@@ -411,13 +443,14 @@ function render() {
 
   const tabs = el('div', {class: 'tabs'});
   const nTech = new Set([...(s.findings || []), ...(s.others || [])].flatMap(c => c.attack || [])).size;
-  for (const [k, t] of [['findings', `Findings [${all.length}]`], ['attack', `ATT&CK [${nTech}]`], ['iocs', `Indicators [${(s.iocs || []).length}]`],
+  for (const [k, t] of [['findings', `Findings [${all.length}]`], ['tools', `Tools [${(s.tools || []).length}]`], ['attack', `ATT&CK [${nTech}]`], ['iocs', `Indicators [${(s.iocs || []).length}]`],
                         ['sources', 'Sources'], ['query', 'Query model']])
     tabs.append(el('button', {class: tab === k ? 'on' : '', on: {click: () => { tab = k; store.set('tab', k); render(); }}}, t));
   m.append(tabs);
 
   if (tab === 'findings') renderFindings(m, all);
   else if (tab === 'attack') renderAttack(m);
+  else if (tab === 'tools') renderTools(m);
   else if (tab === 'iocs') renderIocs(m);
   else if (tab === 'sources') renderSources(m);
   else renderQuery(m);
@@ -445,6 +478,8 @@ function renderFindings(m, all) {
     first: r => r.first, last: r => r.last, score: r => -r.score}[sortBy.k];
   list.sort((x, y) => { const a = key(x), b = key(y); return (a < b ? -1 : a > b ? 1 : 0) * sortBy.d; });
 
+  shownRows = list;
+  if (helpOn) m.append(keysHelp());
   if (!list.length) { m.append(el('div', {class: 'empty'}, all.length ? 'no rows match the filter' : 'nothing flagged in this window')); return; }
   const cols = [['imp', 'sev'], ['title', 'finding'], ['host', 'host'], ['source', 'source / program'], ['event_id', 'id'],
     ['count', 'n'], ['rate', 'rate'], ['first', 'first'], ['last', 'last'], ['score', 'score'], [null, 'label']];
@@ -478,9 +513,16 @@ function detail(r) {
         r.action ? [el('dt', {}, 'action'), el('dd', {}, r.action)] : null,
         r.related ? [el('dt', {}, 'correlation'), el('dd', {}, r.related)] : null,
         tech.length ? [el('dt', {}, 'MITRE ATT&CK'), el('dd', {}, ...tech.map(t => el('div', {}, attackChip(t), techName(t))))] : null,
-        found.length ? [el('dt', {}, `indicators (${found.length}) · click to find every pattern with one`), el('dd', {}, ...found.slice(0, 24).map(iocChip))] : null),
+        found.length ? [el('dt', {}, `indicators (${found.length}) · click to find every pattern with one`), el('dd', {}, ...found.slice(0, 24).map(iocChip))] : null,
+        toolsForKeys(r.keys).length ? [el('dt', {}, 'tools seen in this pattern'), el('dd', {}, ...toolsForKeys(r.keys).map(({t, i}) =>
+          el('button', {class: 'ichip', title: t.what, on: {click: e => { e.stopPropagation(); const j = t.uses.findIndex(u => r.keys.includes(u.key) && u.loc);
+            if (j >= 0) openLog(current.id, `t/${i}/${j}`); else { tab = 'tools'; toolsOpen[i] = true; render(); } }}},
+            el('span', {class: 'lbl'}, (CAT_LABEL[t.category] || t.category) + ' '), t.name)))] : null),
       fbControls(r)),
     el('div', {},
+      el('div', {style: 'display:flex;gap:6px;margin-bottom:8px'},
+        p.first_loc ? logBtn(current.id, `c/${p.key}/-1`, '↗ first occurrence in log') : null,
+        p.last_loc ? logBtn(current.id, `c/${p.key}/-2`, '↗ latest in log') : null),
       kv([['occurrences', r.count], ['first seen', ts(r.first)], ['last seen', ts(r.last)], ['span', span(r)], ['rate', rate(r)],
           ['host', r.host], ['source', p.source], ['program', p.program], ['event id', p.event_id], ['max severity', p.severity],
           ['pre-score', r.score.toFixed(1) + (p.reasons?.length ? '  (' + p.reasons.join('; ') + ')' : '')],
@@ -489,7 +531,8 @@ function detail(r) {
       el('div', {class: 'h', style: 'margin-top:12px'}, el('span', {}, 'template')),
       el('pre', {class: 'sample'}, p.template),
       el('div', {class: 'h', style: 'margin-top:12px'}, el('span', {}, `samples (${r.raws.reduce((n, x) => n + x.samples.length, 0)} distinct, newest first)`)),
-      ...r.raws.flatMap(x => x.samples.map(sm => el('pre', {class: 'sample'}, sm)))),
+      ...r.raws.flatMap(x => x.samples.map((sm, i) => el('div', {class: 'smp'}, el('pre', {class: 'sample'}, sm),
+        (x.sample_locs || [])[i] ? logBtn(current.id, `c/${x.key}/${i}`) : null)))),
     learnBox(r));
 }
 
@@ -499,12 +542,7 @@ function fbControls(r) {
     ...LV.slice(0, 4).map(o => el('option', {value: o, selected: (cur.importance || (r.imp === 'noise' ? 'medium' : r.imp)) === o}, o)));
   const send = async (verdict, importance) => {
     const clear = cur.verdict === verdict && importance === undefined;
-    for (const key of r.keys) {
-      const res = await api('/api/feedback', {scan_id: current.id, key, verdict: clear ? null : verdict,
-        importance: clear || verdict !== 'useful' ? null : (importance || imp.value)});
-      if (res.error) { alert(res.error); return; }
-      if (clear) delete fb[key]; else fb[key] = res;
-    }
+    await labelKeys(current.id, r.keys, clear ? null : verdict, clear || verdict !== 'useful' ? null : (importance || imp.value));
     render();
   };
   return el('div', {class: 'fb', on: {click: e => e.stopPropagation()}}, el('span', {class: 'k'}, 'train'),
@@ -532,15 +570,23 @@ function renderSources(m) {
 }
 
 function renderQuery(m) {
-  const qa = el('textarea', {rows: 3, placeholder: 'e.g. Which finding is most likely to cause data loss, and what is the exact first step?'});
-  const out = el('div', {class: 'answer'});
-  const btn = el('button', {class: 'btn', on: {click: async () => {
-    if (!qa.value.trim()) return;
-    btn.disabled = true; out.textContent = 'querying model…';
-    const r = await api('/api/ask', {scan_id: current.id, question: qa.value});
-    out.textContent = r.answer || ('error: ' + r.error); btn.disabled = false;
-  }}}, 'QUERY');
-  m.append(el('div', {class: 'pad'}, el('div', {class: 'h'}, el('span', {}, 'free-form question about this scan')), qa, btn, out));
+  const st = askState[current.id] ||= {q: '', answer: null, refs: {}, busy: false, error: null};
+  const qa = el('textarea', {rows: 3, placeholder: 'e.g. Which finding is most likely to cause data loss, and what is the exact first step?',
+    on: {input: e => { st.q = e.target.value; }}});
+  qa.value = st.q;
+  const go = async q => {
+    if (!q.trim() || st.busy) return;
+    st.q = q; st.busy = true; st.error = null; render();
+    const r = await api('/api/ask', {scan_id: current.id, question: q});
+    st.busy = false; if (r.error) st.error = r.error; else { st.answer = r.answer; st.refs = r.refs || {}; }
+    if (view === 'scan' && tab === 'query') render();
+  };
+  m.append(el('div', {class: 'pad'},
+    el('div', {class: 'h'}, el('span', {}, 'ask your model about this scan · answers cite the log lines they rely on [E#]: click to open them')),
+    el('div', {class: 'sugg'}, ...suggestions(current).map(q => el('button', {class: 'ichip', disabled: st.busy, on: {click: () => go(q)}}, q))),
+    qa, el('button', {class: 'btn', disabled: st.busy, on: {click: () => go(qa.value)}}, st.busy ? 'MODEL THINKING… (~30-90 s)' : 'ASK'),
+    st.error ? el('div', {class: 'result bad', style: 'margin-top:8px'}, 'error: ' + st.error) : null,
+    st.answer ? el('div', {class: 'answer'}, ...citeText(st.answer, st.refs, current.id)) : null));
 }
 
 // ---------- learning + analyst tools: explain an event, ATT&CK, indicators, reference
@@ -557,13 +603,13 @@ const attackChip = (t, mapped = true) => el('a', {class: 'achip' + (mapped ? '' 
 const iocChip = i => el('button', {class: 'ichip', title: `${i.type}${i.scope ? ' · ' + i.scope : ''} · ${i.count} event(s): show every pattern with it`,
   on: {click: e => { e.stopPropagation(); setPatF(`${i.type} ${i.value}`, i.keys); }}}, el('span', {class: 'lbl'}, i.type + ' '), i.value);
 
-function learnBox(r) {
+function learnBox(r, scanId = current?.id) {
   const key = r.keys[0], x = expl[key];
   const box = el('div', {class: 'learn', on: {click: e => e.stopPropagation()}});
   if (!x) {
     box.append(el('button', {class: 'btn sec', style: 'margin:0', on: {click: async () => {
       expl[key] = {loading: true}; render();
-      const res = await api('/api/explain', {scan_id: current.id, key});
+      const res = await api('/api/explain', {scan_id: scanId, key});
       expl[key] = res; render();
     }}}, 'EXPLAIN THIS EVENT'), el('span', {class: 'lbl', style: 'margin-left:10px'}, 'field-by-field breakdown, what normal looks like, and how to find it yourself'));
     return box;
@@ -572,7 +618,9 @@ function learnBox(r) {
   if (x.error) { box.append(el('span', {class: 'result bad'}, x.error)); return box; }
   const sec = t => el('div', {class: 'h', style: 'margin:14px 0 6px'}, el('span', {}, t));
   const toks = x.segments.filter(s => s.kind);
+  const rr = (current?.findings || []).concat(current?.others || []).find(c => c.key === key);
   box.append(sec('the line, annotated (hover or read the notes below)'),
+    rr && (rr.sample_locs || [])[0] ? el('div', {style: 'margin-bottom:6px'}, logBtn(scanId, `c/${key}/0`, '↗ see it in the log, with the lines around it')) : null,
     el('pre', {class: 'sample anno'}, ...x.segments.map(s => s.kind ? el('span', {class: 'tok ' + s.kind, title: s.note}, s.t) : s.t)),
     toks.length ? el('div', {class: 'kv', style: 'margin-top:6px'}, ...toks.slice(0, 12).flatMap(s => [el('span', {}, el('span', {class: 'tok ' + s.kind}, s.t)), el('span', {}, s.note)])) : null,
     sec('anatomy'),
@@ -597,7 +645,7 @@ function learnBox(r) {
   if (x.level) lvl.value = x.level;
   const ask = el('button', {class: 'btn', style: 'margin:0', on: {click: async () => {
     ask.disabled = true; ask.textContent = 'MODEL THINKING…';
-    const res = await api('/api/explain', {scan_id: current.id, key, ask: true, level: lvl.value});
+    const res = await api('/api/explain', {scan_id: scanId, key, ask: true, level: lvl.value});
     if (!res.error) expl[key] = {...res, level: lvl.value}; else expl[key].model_error = res.error;
     render();
   }}}, 'ASK MODEL');
@@ -675,6 +723,7 @@ function renderIocs(m) {
       el('td', {class: 'n'}, i.count), el('td', {class: 'n'}, i.keys.length), el('td', {class: 'msg'}, i.hosts.join(', ')),
       el('td', {class: 'ts'}, ts(i.first)), el('td', {class: 'ts'}, ts(i.last)),
       el('td', {class: 'act'},
+        i.loc ? logBtn(current.id, `i/${all.indexOf(i)}`, '↗ first seen') : null,
         el('button', {class: 'mini', on: {click: () => setPatF(`${i.type} ${i.value}`, i.keys)}}, 'patterns'),
         el('button', {class: 'mini' + (pv ? ' on' : ''), title: 'every saved scan where this indicator appears', on: {click: async () => {
           if (pivots[pk]) { delete pivots[pk]; render(); return; }
@@ -727,6 +776,279 @@ function renderReference() {
     el('tr', {}, el('td', {}, el('b', {}, k)), el('td', {class: 'msg'}, v))));
   section('MITRE ATT&CK techniques used here', ['technique', 'name', 'tactics'], Object.entries(refCat.techniques).filter(([k, v]) => hit(k, v.name, ...v.tactics)).map(([k, v]) =>
     el('tr', {}, el('td', {}, attackChip(k)), el('td', {class: 'title'}, v.name), el('td', {class: 'msg'}, v.tactics.map(x => refCat.tactics.find(y => y.id === x)?.name).join(', ')))));
+}
+
+// ---------- fast labeling: shared label action, label queue view, keyboard shortcuts
+let Q = null, qi = 0, qUndo = [], qHost = '', qDisagree = false, qExplain = false, shownRows = [], helpOn = false;
+const KEYS_HELP = [['j / ↓', 'next'], ['k / ↑', 'previous'], ['u', 'relevant (suggested importance)'], ['1 2 3 4', 'relevant: critical / high / medium / low'],
+  ['n', 'noise'], ['s', 'skip (queue)'], ['z', 'undo last label (queue)'], ['e', 'explain this event'], ['o / Enter', 'open / close'], ['?', 'show / hide keys']];
+
+async function labelKeys(scanId, keys, verdict, importance) {
+  for (const key of keys) {
+    const res = await api('/api/feedback', {scan_id: scanId, key, verdict, importance: verdict === 'useful' ? importance : null});
+    if (res.error) { $('#joblog').textContent = 'label not saved: ' + res.error; return false; }
+    if (current?.id === scanId) { if (verdict === null) delete fb[key]; else fb[key] = res; }
+  }
+  return true;
+}
+const suggestedImp = r => r.imp === 'noise' ? 'medium' : r.imp;
+
+async function openQueue() {
+  view = 'queue'; history.replaceState(null, '', '#queue');
+  document.querySelectorAll('.hist a').forEach(a => a.classList.remove('active'));
+  $('#main').replaceChildren(el('div', {class: 'empty'}, 'building the queue from all scans…'));
+  Q = await api('/api/queue'); qi = 0; qUndo = []; qExplain = false;
+  updateQueueBadge(); renderQueue();
+}
+const qItems = () => (Q?.items || []).filter(i => (!qHost || i.host === qHost) && (!qDisagree || (i.model && i.model.importance !== i.rules.importance)));
+function updateQueueBadge() { if (Q && !Q.error) $('#qBtn').textContent = `LABEL QUEUE ${Q.unlabeled}`; }
+
+async function qLabel(verdict, importance) {
+  const items = qItems(), it = items[qi]; if (!it) return;
+  if (!(await labelKeys(it.scan_id, [it.key], verdict, verdict === 'useful' ? (importance || (it.suggested === 'noise' ? 'medium' : it.suggested)) : null))) return;
+  qUndo.push({it, verdict});
+  Q.items = Q.items.filter(x => x.key !== it.key);
+  Q.unlabeled--; Q.labeled++; Q.since_model++; Q.by_verdict[verdict]++;
+  if (qi >= qItems().length) qi = Math.max(0, qItems().length - 1);
+  qExplain = false; updateQueueBadge(); renderQueue();
+}
+async function qUndoLast() {
+  const u = qUndo.pop(); if (!u) return;
+  if (!(await labelKeys(u.it.scan_id, [u.it.key], null, null))) return;
+  Q.items.splice(0, 0, u.it); Q.items.sort((a, b) => b.priority - a.priority);
+  Q.unlabeled++; Q.labeled--; Q.since_model--; Q.by_verdict[u.verdict]--;
+  qi = Math.max(0, qItems().findIndex(x => x.key === u.it.key)); updateQueueBadge(); renderQueue();
+}
+
+function renderQueue() {
+  const m = $('#main'); m.replaceChildren();
+  if (!Q || Q.error) { m.append(el('div', {class: 'empty'}, Q?.error || 'loading…')); return; }
+  const items = qItems(), it = items[qi], done = Q.labeled, total = Q.labeled + Q.unlabeled;
+  m.append(el('div', {class: 'head'}, el('p', {class: 'headline'}, 'Label queue'),
+    el('p', {class: 'summary'}, 'Patterns you haven\'t labeled yet, across all scans, ordered by how much your label teaches your model. Your labels count 3x in training; the model only gets better than the rules with them.'),
+    el('div', {class: 'meta'}, el('span', {}, 'labeled ', el('b', {}, done)), el('span', {}, 'relevant ', el('b', {}, Q.by_verdict.useful)),
+      el('span', {}, 'noise ', el('b', {}, Q.by_verdict.noise)), el('span', {}, 'unlabeled ', el('b', {}, Q.unlabeled)),
+      el('span', {}, 'since last model ', el('b', {}, Q.since_model), Q.model_trained ? ` (trained ${ts(Q.model_trained)})` : '')),
+    el('div', {class: 'qbar'}, el('span', {style: `width:${total ? done / total * 100 : 0}%`}))));
+  if (Q.since_model >= 25) {
+    const cmd = sys.os === 'Windows' ? 'python -m logagent dataset; .venv-train\\Scripts\\python trainer\\train.py; .venv-train\\Scripts\\python trainer\\evaluate.py'
+      : 'python3 -m logagent dataset && .venv-train/bin/python trainer/train.py && .venv-train/bin/python trainer/evaluate.py';
+    m.append(el('div', {class: 'alert', style: 'color:var(--ok)'}, `✓ ${Q.since_model} new labels since your last model: enough to retrain. `,
+      el('code', {}, cmd), ' ', el('button', {class: 'mini', on: {click: e => navigator.clipboard?.writeText(cmd).then(() => e.target.textContent = 'copied')}}, 'copy')));
+  }
+  const hosts = [...new Set((Q.items || []).map(i => i.host))].sort();
+  m.append(el('div', {class: 'tools'},
+    el('select', {style: 'width:auto', on: {change: e => { qHost = e.target.value; qi = 0; renderQueue(); }}},
+      el('option', {value: ''}, 'all hosts'), ...hosts.map(h => el('option', {value: h, selected: h === qHost}, h))),
+    el('label', {class: 'chk', style: 'margin:0'}, el('input', {type: 'checkbox', checked: qDisagree, on: {change: e => { qDisagree = e.target.checked; qi = 0; renderQueue(); }}}),
+      'only where model and rules disagree'),
+    el('span', {style: 'flex:1'}), el('span', {class: 'lbl'}, `${items.length ? qi + 1 : 0} / ${items.length}`),
+    el('button', {class: 'mini', on: {click: () => { helpOn = !helpOn; renderQueue(); }}}, '? keys')));
+  if (helpOn) m.append(keysHelp());
+  if (!it) { m.append(el('div', {class: 'empty'}, Q.unlabeled ? 'nothing matches the filter' : 'Queue empty: every pattern is labeled. Run a scan to get new ones.')); return; }
+  const disagree = it.model && it.model.importance !== it.rules.importance;
+  const sevOf = i => el('span', {class: 'sev ' + i}, i);
+  const card = el('div', {class: 'qcard'},
+    el('div', {class: 'qtitle'}, sevOf(it.suggested), el('span', {}, it.title), it.novel ? el('span', {class: 'new'}, 'NEW') : null,
+      ...(it.attack || []).map(t => attackChip(t))),
+    el('div', {class: 'dgrid', style: 'border-left:0'},
+      el('div', {},
+        el('dl', {class: 'prose'},
+          el('dt', {}, 'model says'), el('dd', {}, it.model ? [sevOf(it.model.importance), ' ', it.model.why || it.model.title || ''] : el('span', {class: 'lbl'}, 'not reviewed by the model (scored below the review threshold, or rules-only scan)')),
+          el('dt', {}, 'rules say'), el('dd', {}, sevOf(it.rules.importance), ' ', it.rules.why),
+          disagree ? el('dd', {style: 'color:var(--warn)'}, '⚠ they disagree: your label decides') : null,
+          el('dt', {}, 'why this is in the queue'), el('dd', {}, it.reasons.length ? el('ul', {style: 'margin:2px 0;padding-left:18px'}, ...it.reasons.map(x => el('li', {}, x))) : 'routine pattern; labels here teach the model what noise looks like'))),
+      el('div', {},
+        el('div', {class: 'kv'}, ...[['host', it.host], ['source / program', `${it.source} / ${it.program || '—'}`], ['event id', it.event_id || '—'],
+          ['severity', it.severity], ['occurrences', `${it.count} in newest scan · ${it.total} in ${it.scans} scan(s)`], ['first seen', ts(it.first)], ['last seen', ts(it.last)],
+          ['score', it.score], ['rule', it.rule ? it.rule.title : 'none']].flatMap(([k, v]) => [el('span', {}, k), el('span', {}, String(v))])),
+        el('div', {class: 'h', style: 'margin-top:10px'}, el('span', {}, 'samples')),
+        ...it.samples.map(s => el('pre', {class: 'sample'}, s)))),
+    el('div', {class: 'qact'},
+      ...['critical', 'high', 'medium', 'low'].map((l, i) => el('button', {class: 'qbtn ' + l, on: {click: () => qLabel('useful', l)}}, el('kbd', {}, i + 1), l)),
+      el('button', {class: 'qbtn ok', on: {click: () => qLabel('useful')}}, el('kbd', {}, 'u'), `relevant (${it.suggested === 'noise' ? 'medium' : it.suggested})`),
+      el('button', {class: 'qbtn bad', on: {click: () => qLabel('noise')}}, el('kbd', {}, 'n'), 'noise'),
+      el('button', {class: 'qbtn', on: {click: () => { qi = (qi + 1) % items.length; qExplain = false; renderQueue(); }}}, el('kbd', {}, 's'), 'skip'),
+      el('button', {class: 'qbtn', disabled: !qUndo.length, on: {click: qUndoLast}}, el('kbd', {}, 'z'), 'undo'),
+      el('button', {class: 'qbtn', on: {click: () => { qExplain = !qExplain; renderQueue(); }}}, el('kbd', {}, 'e'), 'explain'),
+      el('button', {class: 'qbtn', on: {click: () => { pendingOpenKey = it.key; openScan(it.scan_id); }}}, el('kbd', {}, 'o'), 'open in scan')),
+    qExplain ? learnBox({keys: [it.key]}, it.scan_id) : null);
+  m.append(el('div', {class: 'pad'}, card));
+  const next = items.slice(qi + 1, qi + 13);
+  if (next.length) m.append(el('div', {class: 'pad'}, el('div', {class: 'h'}, el('span', {}, 'up next')),
+    el('table', {}, ...next.map((x, j) => el('tr', {class: 'r', on: {click: () => { qi = qi + 1 + j; qExplain = false; renderQueue(); }}},
+      el('td', {}, sevOf(x.suggested)), el('td', {class: 'title'}, x.title), el('td', {}, x.host), el('td', {class: 'msg'}, x.reasons[0] || 'routine'),
+      el('td', {class: 'n'}, x.priority.toFixed(0)))))));
+}
+
+function keysHelp() {
+  return el('div', {class: 'pad keys'}, ...KEYS_HELP.map(([k, d]) => el('span', {}, el('kbd', {}, k), ' ', d)));
+}
+
+let pendingOpenKey = null;
+function scrollOpenRow() { requestAnimationFrame(() => document.querySelector('tr.r.open')?.scrollIntoView({block: 'nearest'})); }
+
+async function findingsKey(e) {
+  const k = e.key, rowsNow = shownRows; if (!rowsNow.length) return;
+  let i = rowsNow.findIndex(r => r.keys.join(',') === openKey);
+  const move = d => { i = Math.max(0, Math.min(rowsNow.length - 1, (i < 0 ? (d > 0 ? -1 : 0) : i) + d)); openKey = rowsNow[i].keys.join(','); render(); scrollOpenRow(); };
+  if (k === 'j' || k === 'ArrowDown') { e.preventDefault(); return move(1); }
+  if (k === 'k' || k === 'ArrowUp') { e.preventDefault(); return move(-1); }
+  if (i < 0) return;
+  const r = rowsNow[i];
+  if (k === 'o' || k === 'Enter') { openKey = null; return render(); }
+  if (k === 'e') { if (!expl[r.keys[0]]) { expl[r.keys[0]] = {loading: true}; render(); expl[r.keys[0]] = await api('/api/explain', {scan_id: current.id, key: r.keys[0]}); render(); } return; }
+  const lv = {'1': 'critical', '2': 'high', '3': 'medium', '4': 'low'}[k];
+  if (k === 'u' || lv || k === 'n') {
+    if (await labelKeys(current.id, r.keys, k === 'n' ? 'noise' : 'useful', lv || suggestedImp(r))) move(1);
+  }
+}
+
+function queueKey(e) {
+  const k = e.key, items = qItems();
+  const lv = {'1': 'critical', '2': 'high', '3': 'medium', '4': 'low'}[k];
+  if (k === 'j' || k === 'ArrowDown' || k === 's') { e.preventDefault(); qi = items.length ? (qi + 1) % items.length : 0; qExplain = false; return renderQueue(); }
+  if (k === 'k' || k === 'ArrowUp') { e.preventDefault(); qi = Math.max(0, qi - 1); qExplain = false; return renderQueue(); }
+  if (lv) return qLabel('useful', lv);
+  if (k === 'u') return qLabel('useful');
+  if (k === 'n') return qLabel('noise');
+  if (k === 'z') return qUndoLast();
+  if (k === 'e') { qExplain = !qExplain; return renderQueue(); }
+  if (k === 'o' || k === 'Enter') { const it = items[qi]; if (it) { pendingOpenKey = it.key; openScan(it.scan_id); } }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.target.closest?.('input, textarea, select') || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === '?') { helpOn = !helpOn; return view === 'queue' ? renderQueue() : render(); }
+  if (view === 'log' && e.key === 'Escape') return closeLog();
+  if (view === 'queue') return queueKey(e);
+  if (view === 'scan' && current && tab === 'findings') return findingsKey(e);
+});
+
+// ---------- jump to the event in its log, tools, citations, suggested questions
+let LOGV = null, toolsOpen = {}, askState = {};
+const CAT_LABEL = {attacker: 'attacker tool', miner: 'crypto miner', lolbin: 'built-in abused', tunnel: 'tunnel', 'remote-access': 'remote access',
+  scanner: 'scanner', 'dual-use': 'dual-use', admin: 'admin', system: 'system', developer: 'developer', unknown: 'unknown'};
+const CAT_SEV = {attacker: 'critical', miner: 'critical', lolbin: 'high', tunnel: 'high', 'remote-access': 'medium', scanner: 'medium', 'dual-use': 'medium'};
+const logBtn = (scanId, ref, label = '↗ log', title = 'open this event in its log') => el('button', {class: 'mini logb', title,
+  on: {click: e => { e.stopPropagation(); openLog(scanId, ref); }}}, label);
+
+async function openLog(scanId, ref) {
+  LOGV = {scanId, ref, data: null, filter: '', back: {view, tab, openKey, hash: location.hash}};
+  view = 'log'; renderLog();
+  const d = await api(`/api/logview?scan=${encodeURIComponent(scanId)}&ref=${encodeURIComponent(ref)}&before=30&after=30`);
+  if (LOGV?.ref !== ref) return;
+  LOGV.data = d; renderLog();
+  requestAnimationFrame(() => document.querySelector('.logline.hit')?.scrollIntoView({block: 'center'}));
+}
+function closeLog() {
+  const b = LOGV?.back || {view: 'scan'}; LOGV = null;
+  view = b.view; tab = b.tab; openKey = b.openKey; history.replaceState(null, '', b.hash || '#'); render();
+  if (openKey) setTimeout(scrollOpenRow, 0);
+}
+async function pageLog(dir) {
+  const d = LOGV.data, ls = d.lines; if (!ls.length) return;
+  const at = dir < 0 ? ls[0].at : ls[ls.length - 1].at;
+  const q = `/api/logview?scan=${encodeURIComponent(LOGV.scanId)}&ref=${encodeURIComponent(LOGV.ref)}&at=${encodeURIComponent(at)}` +
+    (dir < 0 ? '&before=100&after=0' : '&before=0&after=100');
+  const r = await api(q); if (r.error) { LOGV.msg = r.error; return renderLog(); }
+  const added = dir < 0 ? r.lines.length - 1 : 0;
+  if (dir < 0) { d.lines = [...r.lines.slice(0, -1), ...ls]; d.at_start = r.at_start; }
+  else { d.lines = [...ls, ...r.lines.slice(1)]; d.at_end = r.at_end; }
+  renderLog();
+  if (dir < 0) document.querySelectorAll('.logline')[added]?.scrollIntoView({block: 'start'});  // keep your place
+}
+
+function renderLog() {
+  const m = $('#main'); m.replaceChildren();
+  const d = LOGV?.data;
+  m.append(el('div', {class: 'head'},
+    el('div', {style: 'display:flex;gap:10px;align-items:center;flex-wrap:wrap'},
+      el('button', {class: 'mini', on: {click: closeLog}}, '← back (esc)'),
+      el('p', {class: 'headline', style: 'margin:0'}, d?.title || 'opening log…')),
+    d && !d.error ? el('div', {class: 'meta', style: 'margin-top:6px'},
+      el('span', {}, 'kind ', el('b', {}, d.kind)), d.target_line ? el('span', {}, 'line ', el('b', {}, d.target_line)) : null,
+      d.kind === 'windows' ? el('span', {}, 'record ', el('b', {}, d.target)) : null,
+      d.size ? el('span', {}, 'size ', el('b', {}, fmtBytes(d.size))) : null,
+      el('span', {}, 'showing ', el('b', {}, d.lines.length), ' lines')) : null));
+  if (!d) { m.append(el('div', {class: 'empty'}, 'reading…')); return; }
+  if (d.error) { m.append(el('div', {class: 'empty'}, d.error)); return; }
+  if (LOGV.msg) m.append(el('div', {class: 'alert'}, LOGV.msg));
+  const fl = LOGV.filter.toLowerCase();
+  m.append(el('div', {class: 'tools'},
+    el('input', {type: 'text', placeholder: 'highlight text in view', value: LOGV.filter, style: 'width:260px',
+      on: {input: e => { LOGV.filter = e.target.value; const pos = e.target.selectionStart; renderLog(); const i = $('#main .tools input'); i.focus(); i.setSelectionRange(pos, pos); }}}),
+    el('button', {class: 'mini', on: {click: () => document.querySelector('.logline.hit')?.scrollIntoView({block: 'center'})}}, 'go to event'),
+    el('span', {style: 'flex:1'}), el('span', {class: 'lbl'}, 'the highlighted line is the event; earlier/later load more of the same log')));
+  const box = el('div', {class: 'logbox'});
+  box.append(d.at_start ? el('div', {class: 'lbl', style: 'padding:4px 10px'}, '— start of log —') :
+    el('button', {class: 'mini', style: 'margin:6px 10px', on: {click: () => pageLog(-1)}}, '▲ earlier 100'));
+  for (const l of d.lines) {
+    const t = l.text;
+    let body = t;
+    if (fl && t.toLowerCase().includes(fl)) {
+      const i = t.toLowerCase().indexOf(fl);
+      body = [t.slice(0, i), el('mark', {}, t.slice(i, i + fl.length)), t.slice(i + fl.length)];
+    }
+    box.append(el('div', {class: 'logline' + (l.hit ? ' hit' : '') + (fl && !t.toLowerCase().includes(fl) ? ' dim' : '')},
+      el('span', {class: 'ln'}, l.n ?? ''), el('span', {class: 'lt'}, body)));
+  }
+  box.append(d.at_end ? el('div', {class: 'lbl', style: 'padding:4px 10px'}, '— end of log —') :
+    el('button', {class: 'mini', style: 'margin:6px 10px', on: {click: () => pageLog(1)}}, '▼ later 100'));
+  m.append(el('div', {class: 'pad'}, box));
+}
+
+function citeText(text, refs, scanId) {  // "... [E3] ..." -> clickable references to log lines
+  const out = [];
+  for (const part of String(text || '').split(/(\[E\d+(?:\s*[,;]\s*E\d+)*\])/)) {
+    const m = part.match(/^\[(E\d+(?:\s*[,;]\s*E\d+)*)\]$/);
+    if (!m) { out.push(part); continue; }
+    for (const id of m[1].split(/\s*[,;]\s*/))
+      out.push(refs?.[id] ? el('button', {class: 'cite', title: 'open this event in its log', on: {click: () => openLog(scanId, refs[id])}}, id) : `[${id}]`);
+  }
+  return out;
+}
+
+function toolsForKeys(keys) { return (current?.tools || []).map((t, i) => ({t, i})).filter(x => x.t.keys.some(k => keys.includes(k))); }
+
+function renderTools(m) {
+  const all = current.tools || [];
+  if (all.some(t => t.approx)) m.append(el('div', {class: 'alert'}, 'ⓘ this scan predates tool detection: tools were found in stored sample lines only, without positions. New scans check every event and link each use to its line.'));
+  m.append(el('div', {class: 'tools'}, el('span', {class: 'lbl'},
+    `${all.length} tool(s). Catalog matches are exact signatures; "model" entries were named by your model and kept only because their evidence is in the log. Click a use to open that line.`)));
+  if (!all.length) { m.append(el('div', {class: 'empty'}, 'No notable tools in this scan.' + (current.stats?.tools === undefined ? '' : ' (Turn on model review to also have the model name the programs it sees.)'))); return; }
+  const t = el('table', {}, el('tr', {}, ...['risk', 'tool', 'what it is', 'uses', 'hosts', 'first', 'last', 'found by', ''].map(h => el('th', {}, h))));
+  all.forEach((x, i) => {
+    const open = toolsOpen[i], sev = CAT_SEV[x.category] || (x.assessment === 'malicious' ? 'critical' : x.assessment === 'suspicious' ? 'high' : 'low');
+    t.append(el('tr', {class: 'r' + (open ? ' open' : ''), on: {click: () => { toolsOpen[i] = !open; render(); }}},
+      el('td', {}, el('span', {class: 'sev ' + sev, style: 'width:auto;padding:1px 6px'}, CAT_LABEL[x.category] || x.category)),
+      el('td', {class: 'title'}, x.name, x.also?.length ? el('div', {class: 'lbl'}, 'also seen as: ' + x.also.join(', ')) : null, ...(x.attack || []).map(a => attackChip(a))),
+      el('td', {class: 'msg'}, x.what, x.why ? el('div', {class: 'lbl'}, (x.assessment ? x.assessment + ': ' : '') + x.why) : null),
+      el('td', {class: 'n'}, x.count), el('td', {class: 'msg'}, (x.hosts || []).join(', ')),
+      el('td', {class: 'ts'}, x.first ? ts(x.first) : '—'), el('td', {class: 'ts'}, x.last ? ts(x.last) : '—'),
+      el('td', {class: 'lbl', title: x.source === 'model' ? 'named by your model; kept because its evidence occurs in the log' + (x.described_by === 'model' ? '. Description written by the model: verify it.' : '') : 'built-in signature'}, x.source + (x.described_by === 'model' ? ' *' : '')),
+      el('td', {class: 'act'}, x.uses?.[0]?.loc ? logBtn(current.id, `t/${i}/0`, '↗ first use') : null,
+        el('button', {class: 'mini', on: {click: e => { e.stopPropagation(); setPatF(`tool ${x.name}`, x.keys); }}}, 'patterns'))));
+    if (open) t.append(el('tr', {class: 'detail'}, el('td', {colspan: 9}, el('div', {class: 'pad', style: 'border-left:2px solid var(--accent)'},
+      el('div', {class: 'h'}, el('span', {}, `uses (${x.uses.length} shown of ${x.count})`)),
+      ...x.uses.map((u, j) => el('div', {class: 'use'}, el('span', {class: 'ts'}, ts(u.ts)), el('span', {class: 'lbl'}, u.host),
+        u.loc ? logBtn(current.id, `t/${i}/${j}`) : el('span', {class: 'lbl'}, 'no position'), el('code', {}, u.evidence)))))));
+  });
+  m.append(t);
+}
+
+function suggestions(s) {
+  const out = ['What happened, step by step? Cite the events.'];
+  const bad = (s.tools || []).filter(t => ['attacker', 'miner', 'lolbin', 'tunnel'].includes(t.category));
+  if (bad.length) out.push(`How was ${bad[0].name} used, and what happened right before and after it?`);
+  const ip = (s.iocs || []).find(i => i.type === 'ip' && i.scope === 'public');
+  if (ip) out.push(`What did ${ip.value} do, and did it ever log in successfully?`);
+  const top = (s.analysis?.findings || []).find(f => ['critical', 'high'].includes((f.importance || '').toLowerCase()));
+  if (top) out.push(`What most likely caused "${top.title}" and what should I do first?`);
+  const user = (s.iocs || []).find(i => i.type === 'user');
+  if (user) out.push(`Is the account "${user.value}" behaving normally?`);
+  out.push('Which of these findings are probably false alarms, and why?');
+  return out.slice(0, 6);
 }
 
 // ---------- log locations: configure, discover, browse, pick files to analyze
@@ -1027,6 +1349,7 @@ $('#scanBtn').addEventListener('click', async () => {
   pollJob(!!r.started);
 });
 $('#locBtn').addEventListener('click', () => openLocations());
+$('#qBtn').addEventListener('click', () => openQueue());
 $('#refBtn').addEventListener('click', () => { view = 'reference'; history.replaceState(null, '', '#reference'); renderReference(); });
 $('#tz').addEventListener('click', () => { utc = !utc; store.set('tz', utc ? 'utc' : 'local'); $('#tz').textContent = utc ? 'UTC' : 'LOCAL'; if (current) render(); loadHistory(); status(); });
 $('#theme').addEventListener('click', () => { const t = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = t; store.set('theme', t); });

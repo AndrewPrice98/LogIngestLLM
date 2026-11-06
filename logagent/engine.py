@@ -8,7 +8,7 @@ from collections import Counter
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-from . import iocs as ioc, knowledge, llm, summary as summ
+from . import iocs as ioc, knowledge, llm, summary as summ, tools as tl
 from .analysis import Baseline, cluster_events, score_clusters, select_findings
 from .collectors.sources import collect, parse_window, SourceError
 from .collectors.windows import CollectorError
@@ -80,10 +80,16 @@ def run_scan(cfg: dict, sources: list[dict] | None = None, window: str | None = 
         per_source[src_label] = len(events) - n0
 
     progress(f"{len(events)} events; clustering ...")
-    indicators = ioc.Collector()
-    clusters = cluster_events(events, rules, lambda e, key: indicators.add(e.message, e.fields, key, e.host, e.ts))
+    indicators, toolcol = ioc.Collector(), tl.Collector()
+
+    def each(e, key):
+        indicators.add(e.message, e.fields, key, e.host, e.ts, e.loc)
+        toolcol.add(e, key)
+
+    clusters = cluster_events(events, rules, each)
     baseline = Baseline(data_dir / "baseline.json")
     score_clusters(clusters, baseline)
+    tl.boost(clusters, toolcol)  # a pattern where an attacker tool / abused built-in shows up is worth reviewing
     selected = select_findings(clusters, int(cfg.get("max_findings", 40)), float(cfg.get("min_score", 30)))
     findings = [c.to_dict() for c in selected]
     chosen = {c.key for c in selected}
@@ -119,9 +125,30 @@ def run_scan(cfg: dict, sources: list[dict] | None = None, window: str | None = 
         analysis = _heuristic_report(findings)
         analysis["_meta"] = {"provider": "none"}
 
+    extra, tools_error = [], None
+    if use_llm and cfg["llm"].get("provider", "none") != "none" and events and cfg["llm"].get("find_tools", True):
+        progress("model identifying tools ...")
+        extra, tools_error = tl.model_pass(toolcol, cfg["llm"])  # may add aliases to catalog rows, so finish after
+        if tools_error:
+            warn(f"[tools] {tools_error}")
+    tools_found = sorted(toolcol.result() + extra, key=lambda r: (tl.RISK.get(r["category"], 9), -r["count"]))
+    stats["tools"] = len(tools_found)
+
     file_summary = None
     if summarize:
         digest = summ.build_digest(sources, events, [c.to_dict() for c in clusters], analysis, viewer, origin)
+        refs = digest.pop("_refs")
+        digest["tools_seen"] = []
+        for ti, t in enumerate(tools_found[:30]):
+            if t["category"] in ("system", "developer") or len(digest["tools_seen"]) >= 15:
+                continue
+            cite = None
+            if t["uses"] and t["uses"][0].get("loc"):
+                cite = f"E{len(refs) + 1}"
+                refs[cite] = f"t/{ti}/0"
+            digest["tools_seen"].append({"cite": cite, "tool": t["name"], "category": t["category"], "uses": t["count"],
+                                         "first_utc": summ._utc(t["first"]) if t["first"] else None,
+                                         "example": (t["uses"][0]["evidence"] if t["uses"] else "")[:200]})
         file_summary = {"origin": origin, "viewer": viewer["pretty"], "by": "rules", "error": None}
         if use_llm and cfg["llm"].get("provider", "none") != "none" and events:
             progress("model summarizing the whole log ...")
@@ -133,6 +160,8 @@ def run_scan(cfg: dict, sources: list[dict] | None = None, window: str | None = 
                 warn(f"[summary] {exc}")
         if not file_summary.get("text"):
             file_summary["text"] = summ.heuristic_summary(digest)
+        used = set(llm.cited_ids(file_summary["text"]))
+        file_summary["refs"] = {k: v for k, v in refs.items() if k in used}
 
     baseline.update(clusters)
     scan = {
@@ -140,7 +169,7 @@ def run_scan(cfg: dict, sources: list[dict] | None = None, window: str | None = 
         "created": datetime.now(timezone.utc).isoformat(),
         "duration_s": round(time.time() - t0, 1),
         "sources": [{k: v for k, v in s.items() if k not in ("identity",)} for s in sources],
-        "label": label, "summary": file_summary, "iocs": indicators.result(),
+        "label": label, "summary": file_summary, "iocs": indicators.result(), "tools": tools_found,
         "stats": stats, "analysis": analysis, "findings": findings, "others": others,
         "warnings": warnings, "llm_error": llm_error,
     }
@@ -180,6 +209,8 @@ def load_scan(cfg: dict, scan_id: str) -> dict | None:
             d["attack"] = knowledge.attack_for(d)
     if "iocs" not in scan:
         scan["iocs"] = ioc.from_clusters(clusters)
+    if "tools" not in scan:
+        scan["tools"] = tl.from_clusters(clusters)
     return scan
 
 

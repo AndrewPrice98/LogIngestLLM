@@ -113,12 +113,14 @@ class Collector:
     def __init__(self):
         self.data: dict[tuple[str, str], dict] = {}
 
-    def add(self, text: str, fields: dict | None, key: str, host: str, ts) -> None:
+    def add(self, text: str, fields: dict | None, key: str, host: str, ts, loc: dict | None = None) -> None:
         for kind, value, scope in extract(text, fields):
             d = self.data.get((kind, value))
             if d is None:
                 d = self.data[(kind, value)] = {"type": kind, "value": value, "scope": scope, "count": 0,
-                                                "first": ts, "last": ts, "hosts": set(), "keys": Counter()}
+                                                "first": ts, "last": ts, "hosts": set(), "keys": Counter(), "loc": loc or None}
+            elif ts < d["first"] and loc:
+                d["loc"] = loc
             d["count"] += 1
             d["first"] = min(d["first"], ts)
             d["last"] = max(d["last"], ts)
@@ -130,7 +132,7 @@ class Collector:
         rows = sorted(self.data.values(), key=lambda d: (order.get(d["type"], 9), -d["count"], d["value"]))[:limit]
         return [{"type": d["type"], "value": d["value"], "scope": d["scope"], "count": d["count"],
                  "first": d["first"].isoformat(), "last": d["last"].isoformat(), "hosts": sorted(d["hosts"])[:20],
-                 "keys": [k for k, _ in d["keys"].most_common(50)]} for d in rows]
+                 "keys": [k for k, _ in d["keys"].most_common(50)], "loc": d.get("loc")} for d in rows]
 
 
 def from_clusters(clusters: list[dict]) -> list[dict]:
@@ -140,7 +142,7 @@ def from_clusters(clusters: list[dict]) -> list[dict]:
     for c in clusters:
         first = datetime.fromisoformat(c["first"])
         for s in c.get("samples", []):
-            col.add(s, c.get("fields"), c["key"], c["host"], first)
+            col.add(s, c.get("fields"), c["key"], c["host"], first)  # no position: old scans predate it
     rows = col.result()
     for r in rows:
         r["approx"] = True

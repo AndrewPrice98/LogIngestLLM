@@ -108,10 +108,14 @@ def build_digest(sources: list[dict], events: list[Event], clusters: list[dict],
         timeline = [b for b in timeline if b in keep]
     by_count = sorted(clusters, key=lambda c: c["count"], reverse=True)
     byk = {c["key"]: c for c in clusters}
-    ranked = []
+    ranked, refs = [], {}
     for f in (analysis.get("findings") or [])[:10]:
         c = next((byk[k] for k in f.get("keys", []) if k in byk), None)
-        ranked.append({"importance": f.get("importance"), "title": f.get("title"), "why": (f.get("why") or "")[:300],
+        cite = None
+        if c and (c.get("sample_locs") or [None])[0]:
+            cite = f"E{len(refs) + 1}"
+            refs[cite] = f"c/{c['key']}/0"
+        ranked.append({"cite": cite, "importance": f.get("importance"), "title": f.get("title"), "why": (f.get("why") or "")[:300],
                        **({"count": c["count"], "first": _utc(c["first"]), "last": _utc(c["last"]), "program": c["program"],
                            "sample": c["samples"][0][:300]} if c else {})})
     errors = [c for c in by_count if c["severity"] in SEV_BAD][:8]
@@ -134,6 +138,7 @@ def build_digest(sources: list[dict], events: list[Event], clusters: list[dict],
         "ranked_findings": ranked,
         "error_patterns": [{"count": c["count"], "program": c["program"], "first": _utc(c["first"]),
                             "last": _utc(c["last"]), "sample": c["samples"][0][:300]} for c in errors],
+        "_refs": refs,
     }
 
 
@@ -155,7 +160,12 @@ def heuristic_summary(d: dict) -> str:
         lines.append("KEY EVENTS:")
         for f in d["ranked_findings"][:6]:
             when = f"{f.get('first', '?')}Z" + (f"..{f['last']}Z" if f.get("last") and f.get("last") != f.get("first") else "")
-            lines.append(f"- {when}: [{f['importance']}] {f['title']}" + (f" ({f['count']}x)" if f.get("count") else ""))
+            lines.append(f"- {when}: [{f['importance']}] {f['title']}" + (f" ({f['count']}x)" if f.get("count") else "") +
+                         (f" [{f['cite']}]" if f.get("cite") else ""))
+    risky = [t for t in d.get("tools_seen", []) if t["category"] in ("attacker", "miner", "lolbin", "tunnel")]
+    if risky:
+        lines.append("TOOLS: " + "; ".join(f"{t['tool']} ({t['uses']}x)" + (f" [{t['cite']}]" if t.get("cite") else "")
+                                         for t in risky[:6]))
     if d["frequent_patterns"]:
         p = d["frequent_patterns"][0]
         lines.append(f"NOISE: {p['count'] * 100 // max(1, d['events'])}% of events are \"{p['pattern'][:100]}\" "

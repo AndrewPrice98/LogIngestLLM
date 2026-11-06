@@ -105,6 +105,7 @@ def _parse_one(ev: ET.Element, source_label: str) -> Event | None:
         ts=ts, host=computer, source=f"{source_label}:{channel or '?'}",
         severity=sev, message=" ".join(msg.split()), program=provider_name,
         event_id=event_id, fields=data,
+        loc={k: v for k, v in (("record", _text(sysn, "e:EventRecordID")), ("channel", channel)) if v},
     )
 
 

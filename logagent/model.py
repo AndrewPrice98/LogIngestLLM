@@ -37,6 +37,7 @@ class Event:
     program: str = ""      # provider / unit / process name
     event_id: str = ""     # Windows EventID, MESSAGE_ID, etc.
     fields: dict[str, Any] = field(default_factory=dict)
+    loc: dict[str, Any] = field(default_factory=dict)  # where it is: file+line+pos, journal cursor, or Windows record
 
     @property
     def severity_name(self) -> str:

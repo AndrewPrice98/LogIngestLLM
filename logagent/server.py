@@ -14,7 +14,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import __version__, engine, explain, feedback, knowledge, llm, locations
+from . import __version__, engine, explain, feedback, knowledge, labelqueue, llm, locations, logview
 from .collectors.sources import parse_window
 
 STATIC = Path(__file__).parent / "static"
@@ -156,6 +156,18 @@ def make_handler(cfg: dict, job: Job, sched: dict):
                 return self._send(200, feedback.for_scan(cfg, path.rsplit("/", 1)[-1]))
             if path == "/api/job":
                 return self._send(200, job.snapshot())
+            if path == "/api/logview":
+                qs = parse_qs(urlparse(self.path).query)
+                g = lambda k, d=None: (qs.get(k) or [d])[0]
+                scan = engine.load_scan(cfg, str(g("scan", "")))
+                if not scan:
+                    return self._send(404, {"error": "unknown scan"})
+                try:
+                    return self._send(200, logview.view(scan, str(g("ref", "")), int(g("before", 25)), int(g("after", 25)), g("at")))
+                except (logview.ViewError, ValueError) as exc:
+                    return self._send(400, {"error": str(exc)})
+            if path == "/api/queue":
+                return self._send(200, labelqueue.build(cfg))
             if path == "/api/reference":
                 return self._send(200, knowledge.reference_catalog())
             if path == "/api/pivot":
@@ -235,7 +247,8 @@ def make_handler(cfg: dict, job: Job, sched: dict):
                 if not scan or not q:
                     return self._send(400, {"error": "scan_id and question required"})
                 try:
-                    return self._send(200, {"answer": llm.ask(scan, q, cfg["llm"])})
+                    answer, refs = llm.ask(scan, q, cfg["llm"])
+                    return self._send(200, {"answer": answer, "refs": refs})
                 except llm.LLMError as exc:
                     return self._send(502, {"error": str(exc)})
             return self._send(404, {"error": "not found"})

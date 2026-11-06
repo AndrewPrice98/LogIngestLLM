@@ -45,6 +45,17 @@ The summary is OS-aware: logagent works out which OS produced the log (from the 
 - **ATT&CK** tab: findings mapped to MITRE ATT&CK techniques, laid out by tactic; click a technique to see its patterns. Only evidence is mapped (rule hits and events that are notable in themselves, such as log clearing or account creation); routine events like a normal logon only show related techniques as context.
 - **Indicators** tab: every IP (public/private), domain, URL, email, file hash and user name, extracted from every event with exact counts. Click *patterns* to filter findings to it, *pivot* to find it in every saved scan, or export CSV.
 
+## Tools, jumping to the event, and asking your model
+
+- **Tools** tab: which tools show up in the logs: attacker tools (Mimikatz, LinPEAS, reverse shells, C2), Windows/Linux built-ins being abused (certutil downloads, encoded PowerShell, comsvcs.dll LSASS dumps, `curl | sh`, shadow-copy deletion), scanners (Nmap, sqlmap, Nikto, gobuster, by command or web user agent), remote-access software, tunnels and miners. A built-in signature catalog checks every event; your model then names the remaining programs and binaries. A model-named tool is only kept if its evidence string really occurs in the log, and it's folded into the catalog entry when it is the same lines. Patterns that contain a tool are scored up so they reach the findings and the model review.
+- **Jump to the event**: every event remembers where it is (file + line + byte offset, journal cursor, or Windows record ID). Click **↗ log** on a tool use, a sample line, an indicator, a first/latest occurrence or a citation to open the original log at that line with the lines around it; page earlier/later, highlight text, `Esc` to go back. Works for text and `.gz` files, the local journal, a Pi/Jetson's journal over SSH, exported `.evtx`/`.xml` and (on Windows) live channels.
+- **Citations**: the whole-log summary and **Query model** answers cite real events as `[E3]`; click one to open that line. Query model offers questions generated from the scan (what happened step by step, how a tool was used, what an IP did, likely false alarms).
+- Samples to try: `samples/intrusion-auth.log` (Linux break-in), `samples/web-access.log` (web scanners), `samples/windows-security.xml` (Windows intrusion).
+
+## Label queue
+
+**LABEL QUEUE** (top bar) shows every pattern you haven't labeled, across all scans, once, ordered by what your label teaches the model most: where the model and the rules disagree, alarms to confirm, errors no rule covers, new and recurring patterns. Keys: `j`/`k` move, `u` relevant (suggested importance), `1`-`4` relevant as critical/high/medium/low, `n` noise, `s` skip, `z` undo, `e` explain, `o` open in its scan, `?` help. The same keys work in a scan's findings table. After 25 new labels it shows the retrain commands.
+
 ## How it decides what's valuable
 
 1. **Collect** events from each source into one format (time, host, severity, program, message).

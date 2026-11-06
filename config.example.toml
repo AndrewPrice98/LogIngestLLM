@@ -1,6 +1,7 @@
 # Copy to logagent.toml and edit.
 data_dir = "data"        # scan history + baseline of "seen before" patterns
 window = "24h"           # default look-back for a scan
+schedule = "6h"          # automatic scan of enabled sources while the dashboard runs ("" = manual only)
 max_findings = 40        # clusters handed to the LLM
 min_score = 30           # pre-filter threshold (0-150); lower = more findings
 

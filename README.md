@@ -8,15 +8,15 @@ Runs on your own LLM (Ollama, LM Studio, llama.cpp, vLLM...). Works with no LLM 
 
 ## Quick start (Windows)
 
-```powershell
-cd D:\Projects\LogIngestionLLM
-copy config.example.toml logagent.toml    # then edit sources and [llm]
-python -m logagent ui                       # opens http://127.0.0.1:8765
-```
+Double-click **Start logagent** on the desktop (or `Start logagent.bat` here). It:
 
-Or double-click `start-dashboard.bat`. Python 3.11+ only, no packages to install.
+1. starts your trained model in the background (if `models\*dapter` exists) and waits until it answers,
+2. starts the dashboard at http://127.0.0.1:8765 and opens it,
+3. runs an automatic scan every 6 h (`schedule` in `logagent.toml`) while it's open.
 
-For the Security log (failed logons, new accounts, audit-log cleared), run from an **admin** terminal.
+Use **Start logagent (admin)** to include the Security log (failed logons, account changes, audit-log cleared). Closing the window stops everything. If the model isn't available the dashboard says so in the top bar and falls back to the built-in rules.
+
+Settings live in `logagent.toml` (copied from `config.example.toml` on first run). Sources with `enabled = false` are listed but not scanned by default.
 
 ## How it decides what's valuable
 

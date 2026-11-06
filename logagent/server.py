@@ -1,16 +1,21 @@
 """Local web dashboard. Stdlib only. Binds to 127.0.0.1 by default."""
 from __future__ import annotations
 
+import ctypes
 import json
+import os
 import threading
+import time
 import traceback
+import urllib.request
 import webbrowser
-from datetime import datetime
+from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse
 
-from . import engine, feedback, llm
+from . import __version__, engine, feedback, llm
+from .collectors.sources import parse_window
 
 STATIC = Path(__file__).parent / "static"
 
@@ -28,15 +33,50 @@ class Job:
             return {"running": self.running, "log": self.log[-200:], "scan_id": self.scan_id, "error": self.error}
 
 
-def make_handler(cfg: dict, job: Job):
+def is_admin() -> bool:
+    try:
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except (AttributeError, OSError):
+        return hasattr(os, "geteuid") and os.geteuid() == 0
+
+
+_model_cache: dict = {"t": 0.0, "v": None}
+
+
+def model_status(llm_cfg: dict) -> dict:
+    """Is the configured model reachable? Cached for 10 s."""
+    prov = (llm_cfg.get("provider") or "none").lower()
+    if prov in ("none", "anthropic"):
+        return {"state": "off" if prov == "none" else "remote", "detail": prov}
+    if time.time() - _model_cache["t"] < 10 and _model_cache["v"]:
+        return _model_cache["v"]
+    base = (llm_cfg.get("base_url") or ("http://localhost:11434" if prov == "ollama" else "")).rstrip("/")
+    url = base + ("/api/tags" if prov == "ollama" else "/models")
+    t0 = time.time()
+    try:
+        with urllib.request.urlopen(url, timeout=2) as r:
+            r.read(2000)
+        v = {"state": "online", "detail": base, "latency_ms": round((time.time() - t0) * 1000)}
+    except Exception as exc:  # noqa: BLE001 - any failure means offline
+        v = {"state": "offline", "detail": f"{base}: {getattr(exc, 'reason', exc)}"}
+    _model_cache.update(t=time.time(), v=v)
+    return v
+
+
+def src_name(s: dict) -> str:
+    return s.get("name") or s.get("type")
+
+
+def make_handler(cfg: dict, job: Job, sched: dict):
     def public_sources():
-        return [{"name": s.get("name") or s.get("type"), "type": s.get("type"),
+        return [{"name": src_name(s), "type": s.get("type"), "enabled": s.get("enabled", True),
                  "detail": s.get("host") or s.get("path") or ",".join(s.get("channels", []) or [])}
                 for s in cfg.get("sources", [])]
 
     def start_scan(body: dict):
         names = body.get("sources")
-        srcs = [s for s in cfg.get("sources", []) if not names or (s.get("name") or s.get("type")) in names]
+        srcs = [s for s in cfg.get("sources", [])
+                if (src_name(s) in names if names is not None else s.get("enabled", True))]
         with job.lock:
             if job.running:
                 return False
@@ -44,7 +84,7 @@ def make_handler(cfg: dict, job: Job):
 
         def progress(msg):
             with job.lock:
-                job.log.append(f"{datetime.now():%H:%M:%S} {msg}")
+                job.log.append(f"{datetime.now(timezone.utc):%H:%M:%SZ} {msg}")
 
         def work():
             try:
@@ -94,6 +134,12 @@ def make_handler(cfg: dict, job: Job):
                                         "llm": {"provider": cfg["llm"].get("provider"),
                                                 "model": cfg["llm"].get("model")},
                                         "config_path": cfg.get("_path")})
+            if path == "/api/status":
+                return self._send(200, {
+                    "version": __version__, "model": model_status(cfg["llm"]),
+                    "llm": {k: cfg["llm"].get(k) for k in ("provider", "model", "mode", "base_url")},
+                    "admin": is_admin(), "schedule": sched, "job_running": job.snapshot()["running"],
+                    "config_path": cfg.get("_path"), "data_dir": str(Path(cfg["data_dir"]).resolve())})
             if path == "/api/scans":
                 return self._send(200, engine.list_scans(cfg))
             if path.startswith("/api/scans/"):
@@ -137,14 +183,32 @@ def make_handler(cfg: dict, job: Job):
                     return self._send(502, {"error": str(exc)})
             return self._send(404, {"error": "not found"})
 
+    Handler.start_scan = staticmethod(start_scan)
     return Handler
+
+
+def _scheduler(cfg: dict, sched: dict, start_scan) -> None:
+    """Run a scan of all enabled sources every `schedule` (e.g. "6h"), covering the gap since the last one."""
+    every = parse_window(cfg["schedule"]).total_seconds()
+    sched["next"] = datetime.fromtimestamp(time.time() + every, timezone.utc).isoformat()
+    while True:
+        time.sleep(max(5, datetime.fromisoformat(sched["next"]).timestamp() - time.time()))
+        started = start_scan({"window": cfg["schedule"], "use_llm": True})
+        sched["last_auto"] = datetime.now(timezone.utc).isoformat()
+        sched["last_auto_started"] = started
+        sched["next"] = datetime.fromtimestamp(time.time() + every, timezone.utc).isoformat()
 
 
 def serve(cfg: dict, host: str = "127.0.0.1", port: int = 8765, open_browser: bool = True) -> None:
     if host not in ("127.0.0.1", "localhost", "::1"):
         cfg["_allow_any_host"] = True
         print("WARNING: dashboard is reachable from your network and has no login.")
-    httpd = ThreadingHTTPServer((host, port), make_handler(cfg, Job()))
+    sched: dict = {"every": cfg.get("schedule") or None, "next": None}
+    handler = make_handler(cfg, Job(), sched)
+    httpd = ThreadingHTTPServer((host, port), handler)
+    if cfg.get("schedule"):
+        threading.Thread(target=_scheduler, args=(cfg, sched, handler.start_scan), daemon=True).start()
+        print(f"automatic scans every {cfg['schedule']}")
     url = f"http://{'127.0.0.1' if host in ('0.0.0.0', '::') else host}:{port}/"
     print(f"logagent dashboard on {url}  (Ctrl+C to stop)")
     if open_browser:

@@ -1,263 +1,468 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Log Agent</title>
+<title>logagent console</title>
 <style>
 :root{
-  --bg:#f6f7f9;--panel:#fff;--panel2:#f0f2f5;--text:#1b1f24;--muted:#5f6b7a;--border:#dde2e8;
-  --accent:#2f6fde;--accent-ink:#fff;
-  --crit:#c62828;--crit-bg:#fdecec;--high:#d9661f;--high-bg:#fdf1e7;--med:#a68a00;--med-bg:#fbf6dd;--low:#4a6a8a;--low-bg:#eaf0f6;
-  --ok:#2e7d32;--mono:ui-monospace,SFMono-Regular,Consolas,monospace;
+  --mono:"Cascadia Mono","JetBrains Mono",ui-monospace,SFMono-Regular,Consolas,monospace;
+  --sans:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
 }
-@media (prefers-color-scheme:dark){:root{
-  --bg:#0f1216;--panel:#171b21;--panel2:#1e242c;--text:#e6e9ee;--muted:#93a0b0;--border:#2a313b;
-  --accent:#5b8ff0;--accent-ink:#fff;
-  --crit:#ff6b6b;--crit-bg:#3a1a1c;--high:#ff9a52;--high-bg:#3a2617;--med:#e7c84a;--med-bg:#33301a;--low:#8fb0d4;--low-bg:#1c2633;
-  --ok:#6cc070;
-}}
+[data-theme=dark]{
+  --bg:#0a0d11;--bg2:#0e1217;--panel:#11161c;--panel2:#161c24;--line:#1f2731;--line2:#2a3542;
+  --text:#d5dde6;--muted:#7b8898;--dim:#566270;--accent:#36c2dc;--accent2:#1e6f80;
+  --crit:#ff4d5e;--high:#ff9f43;--med:#e9cc3f;--low:#6ea8fe;--noise:#5c6773;--ok:#3ddc84;--warn:#ffb547;
+  --rowhover:#141b23;--sel:#132530;
+}
+[data-theme=light]{
+  --bg:#eef1f4;--bg2:#e6eaee;--panel:#ffffff;--panel2:#f4f6f8;--line:#d9dfe5;--line2:#c7d0d9;
+  --text:#18202a;--muted:#5a6776;--dim:#8592a0;--accent:#0b7f95;--accent2:#b9e2ea;
+  --crit:#d2283a;--high:#c96a0c;--med:#9a7f00;--low:#2f6fde;--noise:#7b8794;--ok:#1d8a4e;--warn:#b86e00;
+  --rowhover:#f1f5f8;--sel:#e3f2f5;
+}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
-header{display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--border);background:var(--panel)}
-header h1{font-size:17px;margin:0;font-weight:650}
-.badge{font-size:12px;padding:2px 8px;border-radius:99px;background:var(--panel2);color:var(--muted);border:1px solid var(--border)}
-.layout{display:grid;grid-template-columns:300px 1fr;gap:16px;padding:16px;max-width:1400px;margin:0 auto}
-aside,main{min-width:0}
-.card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px}
-.card h2{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 10px}
-label.src{display:flex;gap:8px;align-items:flex-start;padding:4px 0;cursor:pointer}
-label.src small{display:block;color:var(--muted);font-size:12px;word-break:break-all}
-select,input[type=text],textarea{width:100%;background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:7px 8px;font:inherit}
-button{background:var(--accent);color:var(--accent-ink);border:0;border-radius:6px;padding:8px 14px;font:inherit;font-weight:600;cursor:pointer}
-button:disabled{opacity:.5;cursor:default}
-button.ghost{background:transparent;color:var(--accent);border:1px solid var(--border);font-weight:500}
-.row{display:flex;gap:8px;align-items:center;margin-top:8px}
-#joblog{font:12px/1.4 var(--mono);color:var(--muted);max-height:160px;overflow:auto;white-space:pre-wrap;margin-top:8px}
-.hist a{display:block;padding:7px 8px;border-radius:6px;color:inherit;text-decoration:none;border:1px solid transparent}
-.hist a:hover{background:var(--panel2)}
-.hist a.active{border-color:var(--accent);background:var(--panel2)}
-.hist small{color:var(--muted);display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.headline{font-size:19px;font-weight:650;margin:0 0 6px}
-.summary{color:var(--muted);margin:0}
-.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-top:14px}
-.tile{background:var(--panel2);border-radius:8px;padding:10px}
-.tile b{display:block;font-size:20px}
-.tile span{font-size:12px;color:var(--muted)}
-.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
-.filters select{width:auto}
-.finding{border:1px solid var(--border);border-left:4px solid var(--low);border-radius:8px;padding:12px 14px;margin-bottom:10px;background:var(--panel)}
-.finding.critical{border-left-color:var(--crit)}.finding.high{border-left-color:var(--high)}.finding.medium{border-left-color:var(--med)}
-.pill{font-size:11px;font-weight:700;text-transform:uppercase;padding:2px 7px;border-radius:4px;letter-spacing:.04em}
-.pill.critical{background:var(--crit-bg);color:var(--crit)}.pill.high{background:var(--high-bg);color:var(--high)}
-.pill.medium{background:var(--med-bg);color:var(--med)}.pill.low{background:var(--low-bg);color:var(--low)}
-.finding h3{margin:0;font-size:15px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.finding .host{color:var(--muted);font-weight:400;font-size:13px}
-.finding dl{margin:8px 0 0;display:grid;grid-template-columns:70px 1fr;gap:4px 10px}
-.finding dt{color:var(--muted);font-size:12px;padding-top:2px}
-.finding dd{margin:0}
-details{margin-top:8px}
-summary{cursor:pointer;color:var(--accent);font-size:13px}
-pre{font:12px/1.45 var(--mono);background:var(--panel2);padding:8px;border-radius:6px;white-space:pre-wrap;word-break:break-word;margin:6px 0;max-height:240px;overflow:auto}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top}
-th{color:var(--muted);font-weight:500;font-size:12px}
-td.msg{font-family:var(--mono);font-size:12px;word-break:break-word}
-.warn{color:var(--high);font-size:13px}
-.empty{color:var(--muted);text-align:center;padding:40px 10px}
-.answer{white-space:pre-wrap;margin-top:10px}
-.tabs{display:flex;gap:4px;margin-bottom:10px}
-.tabs button{background:transparent;color:var(--muted);border:1px solid transparent;font-weight:500}
-.fb{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--muted)}
-.fb button{background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:3px 9px;font-weight:500;font-size:12px}
-.fb button.on.useful{background:var(--ok);border-color:var(--ok);color:#fff}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font:12.5px/1.45 var(--mono);-webkit-font-smoothing:antialiased}
+button,select,input,textarea{font:inherit;color:inherit}
+a{color:var(--accent)}
+/* ---------- top bar */
+.bar{display:flex;align-items:stretch;border-bottom:1px solid var(--line);background:var(--bg2);min-height:34px;overflow-x:auto;white-space:nowrap}
+.bar>div{display:flex;align-items:center;gap:6px;padding:0 12px;border-right:1px solid var(--line);color:var(--muted)}
+.bar b{color:var(--text);font-weight:600}
+.brand{color:var(--accent)!important;font-weight:700;letter-spacing:.08em}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--noise);display:inline-block}
+.dot.online{background:var(--ok);box-shadow:0 0 6px var(--ok)}.dot.offline{background:var(--crit)}.dot.off{background:var(--noise)}
+.bar .grow{flex:1;border-right:0}
+.bar button{background:none;border:1px solid var(--line2);color:var(--muted);padding:2px 8px;cursor:pointer;border-radius:2px}
+.bar button:hover{color:var(--text);border-color:var(--accent)}
+/* ---------- layout */
+.wrap{display:grid;grid-template-columns:272px 1fr;height:calc(100% - 35px)}
+aside{border-right:1px solid var(--line);background:var(--bg2);overflow-y:auto;min-width:0}
+main{overflow-y:auto;min-width:0;padding:0 0 40px}
+.sec{border-bottom:1px solid var(--line);padding:10px 12px}
+.h{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:0 0 8px;display:flex;justify-content:space-between}
+.src{display:grid;grid-template-columns:16px 1fr;gap:6px;padding:3px 0;cursor:pointer;align-items:start}
+.src input{margin:2px 0 0;accent-color:var(--accent)}
+.src .t{color:var(--dim);font-size:11px;word-break:break-all}
+.tag{display:inline-block;font-size:10px;padding:0 4px;border:1px solid var(--line2);color:var(--muted);border-radius:2px;margin-right:4px;text-transform:uppercase}
+select,input[type=text],textarea{background:var(--panel);border:1px solid var(--line2);border-radius:2px;padding:5px 7px;width:100%}
+select:focus,input:focus,textarea:focus{outline:1px solid var(--accent);border-color:var(--accent)}
+.run{width:100%;margin-top:8px;background:var(--accent);color:#031015;border:0;padding:7px;font-weight:700;letter-spacing:.06em;cursor:pointer;border-radius:2px}
+.run:disabled{background:var(--line2);color:var(--muted);cursor:default}
+.chk{display:flex;gap:6px;align-items:center;margin-top:8px;color:var(--muted);cursor:pointer}
+.chk input{accent-color:var(--accent)}
+pre.console{margin:8px 0 0;max-height:150px;overflow:auto;background:var(--bg);border:1px solid var(--line);padding:6px;font-size:11px;color:var(--muted);white-space:pre-wrap}
+.hist a{display:grid;grid-template-columns:1fr auto;gap:2px 8px;padding:5px 6px;border-left:2px solid transparent;color:var(--text);text-decoration:none}
+.hist a:hover{background:var(--rowhover)}
+.hist a.active{border-left-color:var(--accent);background:var(--sel)}
+.hist .m{color:var(--dim);font-size:11px;grid-column:1/-1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* ---------- scan header */
+.head{padding:14px 18px 10px;border-bottom:1px solid var(--line);background:var(--panel)}
+.headline{font:600 15px/1.35 var(--sans);margin:0 0 4px}
+.summary{font:13px/1.5 var(--sans);color:var(--muted);margin:0 0 10px;max-width:110ch}
+.meta{display:flex;flex-wrap:wrap;gap:4px 18px;color:var(--dim);font-size:11.5px}
+.meta b{color:var(--muted);font-weight:500}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));border-bottom:1px solid var(--line)}
+.kpi{padding:9px 14px;border-right:1px solid var(--line);background:var(--panel)}
+.kpi .v{font-size:19px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums}
+.kpi .l{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.kpi.crit .v{color:var(--crit)}.kpi.high .v{color:var(--high)}.kpi.med .v{color:var(--med)}.kpi.low .v{color:var(--low)}
+.sevbar{display:flex;height:4px;background:var(--line)}
+.sevbar span{display:block;height:100%}
+.alert{padding:6px 18px;border-bottom:1px solid var(--line);color:var(--warn);background:color-mix(in srgb,var(--warn) 8%,transparent);font-size:11.5px}
+/* ---------- tabs + toolbar */
+.tabs{display:flex;border-bottom:1px solid var(--line);background:var(--bg2);position:sticky;top:0;z-index:2}
+.tabs button{background:none;border:0;border-bottom:2px solid transparent;color:var(--muted);padding:8px 14px;cursor:pointer;letter-spacing:.06em;text-transform:uppercase;font-size:11px}
+.tabs button.on{color:var(--text);border-bottom-color:var(--accent)}
+.tabs .sp{flex:1}
+.tools{display:flex;gap:8px;padding:8px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap;align-items:center}
+.tools input[type=text]{width:280px}
+.tools select{width:auto}
+.chip{border:1px solid var(--line2);background:none;color:var(--muted);padding:2px 8px;border-radius:2px;cursor:pointer;font-size:11px;text-transform:uppercase}
+.chip.on{color:#031015;font-weight:700}
+.chip.critical.on{background:var(--crit);border-color:var(--crit)}.chip.high.on{background:var(--high);border-color:var(--high)}
+.chip.medium.on{background:var(--med);border-color:var(--med)}.chip.low.on{background:var(--low);border-color:var(--low)}
+/* ---------- tables */
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th{position:sticky;top:33px;background:var(--bg2);z-index:1;text-align:left;font-weight:500;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);padding:6px 8px;border-bottom:1px solid var(--line2);cursor:pointer;user-select:none;white-space:nowrap}
+th.sorted{color:var(--accent)}
+td{padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+tr.r{cursor:pointer}
+tr.r:hover td{background:var(--rowhover)}
+tr.r.open td{background:var(--sel)}
+td.n{text-align:right;white-space:nowrap}
+td.ts{white-space:nowrap;color:var(--muted)}
+td.title{font-family:var(--sans);font-size:13px}
+td.msg{color:var(--muted);word-break:break-word;font-size:11.5px}
+.sev{display:inline-block;width:62px;text-align:center;font-size:10px;font-weight:700;letter-spacing:.06em;padding:1px 0;border-radius:2px;text-transform:uppercase}
+.sev.critical{background:var(--crit);color:#fff}.sev.high{background:var(--high);color:#1a0d00}
+.sev.medium{background:var(--med);color:#1a1600}.sev.low{background:transparent;color:var(--low);border:1px solid var(--low)}
+.sev.noise{color:var(--noise);border:1px solid var(--noise)}
+.new{color:var(--accent);font-size:10px;font-weight:700;margin-left:6px}
+.lbl{font-size:10.5px;color:var(--dim)}
+.lbl.useful{color:var(--ok)}.lbl.noise{color:var(--crit)}
+/* ---------- detail */
+.detail td{padding:0;background:var(--panel)!important;cursor:default}
+.dgrid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:0;border-left:2px solid var(--accent)}
+.dgrid>div{padding:12px 16px;min-width:0}
+.dgrid>div+div{border-left:1px solid var(--line)}
+.prose{font:13px/1.55 var(--sans)}
+.prose dt{font:10.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-top:8px}
+.prose dt:first-child{margin-top:0}
+.prose dd{margin:2px 0 0}
+.kv{display:grid;grid-template-columns:110px 1fr;gap:3px 10px;font-size:11.5px}
+.kv span:nth-child(odd){color:var(--dim)}
+.kv span:nth-child(even){word-break:break-all}
+pre.sample{margin:6px 0 0;background:var(--bg);border:1px solid var(--line);padding:7px 8px;font-size:11.5px;white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto;color:var(--text)}
+.fb{display:flex;gap:6px;align-items:center;margin-top:12px;padding-top:10px;border-top:1px dashed var(--line2);flex-wrap:wrap}
+.fb .k{color:var(--dim);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;margin-right:4px}
+.fb button{background:none;border:1px solid var(--line2);color:var(--muted);padding:3px 9px;cursor:pointer;border-radius:2px;font-size:11.5px}
+.fb button:hover{border-color:var(--accent);color:var(--text)}
+.fb button.on.useful{background:var(--ok);border-color:var(--ok);color:#03140a}
 .fb button.on.noise{background:var(--crit);border-color:var(--crit);color:#fff}
-.fb select{width:auto;padding:3px 6px;font-size:12px}
-.tabs button.on{color:var(--text);border-color:var(--border);background:var(--panel)}
-@media (max-width:860px){.layout{grid-template-columns:1fr;padding:12px}}
+.fb select{width:auto;padding:2px 6px;font-size:11.5px}
+.empty{padding:40px 18px;color:var(--dim);text-align:center}
+.pad{padding:12px 18px}
+.answer{white-space:pre-wrap;font:13px/1.55 var(--sans);margin-top:10px;max-width:110ch}
+.btn{background:var(--accent);color:#031015;border:0;padding:6px 14px;font-weight:700;border-radius:2px;cursor:pointer;margin-top:8px}
+.btn:disabled{opacity:.5}
+td.title{min-width:200px}
+@media (max-width:1250px){.hide-sm{display:none}}
+@media (max-width:900px){.wrap{grid-template-columns:1fr;height:auto}aside{border-right:0;border-bottom:1px solid var(--line)}.dgrid{grid-template-columns:1fr}.dgrid>div+div{border-left:0;border-top:1px solid var(--line)}.hide-sm{display:none}}
 </style>
 </head>
 <body>
-<header>
-  <h1>Log Agent</h1>
-  <span class="badge" id="llmBadge">LLM: …</span>
-</header>
-<div class="layout">
+<div class="bar" id="bar">
+  <div class="brand">LOGAGENT</div>
+  <div>model <span class="dot" id="mDot"></span><b id="mName">…</b><span id="mDetail"></span></div>
+  <div>privilege <b id="adm">…</b></div>
+  <div>schedule <b id="sch">…</b></div>
+  <div class="grow"></div>
+  <div><button id="tz" title="Toggle UTC / local time">UTC</button><button id="theme" title="Toggle theme">◐</button></div>
+</div>
+<div class="wrap">
   <aside>
-    <div class="card">
-      <h2>New scan</h2>
+    <div class="sec">
+      <div class="h"><span>Sources</span><span id="srcCount"></span></div>
       <div id="sources"></div>
-      <div class="row">
-        <select id="window" aria-label="Time window">
-          <option value="1h">Last hour</option><option value="6h">Last 6 hours</option>
-          <option value="24h" selected>Last 24 hours</option><option value="3d">Last 3 days</option>
-          <option value="7d">Last 7 days</option>
-        </select>
-      </div>
-      <label class="src"><input type="checkbox" id="useLlm" checked> Ask the LLM to review</label>
-      <div class="row"><button id="scanBtn">Scan now</button></div>
-      <div id="joblog"></div>
     </div>
-    <div class="card hist">
-      <h2>History</h2>
-      <div id="history"><div class="empty">No scans yet</div></div>
+    <div class="sec">
+      <div class="h"><span>Window</span></div>
+      <select id="window" aria-label="Time window">
+        <option value="1h">1h</option><option value="6h">6h</option><option value="24h" selected>24h</option>
+        <option value="3d">3d</option><option value="7d">7d</option><option value="30d">30d</option>
+      </select>
+      <label class="chk"><input type="checkbox" id="useLlm" checked> model review</label>
+      <button class="run" id="scanBtn">RUN SCAN</button>
+      <pre class="console" id="joblog">idle</pre>
+    </div>
+    <div class="sec hist">
+      <div class="h"><span>History</span><span id="histCount"></span></div>
+      <div id="history"><div class="empty">no scans</div></div>
     </div>
   </aside>
-  <main id="main"><div class="card empty">Pick sources and press <b>Scan now</b>.</div></main>
+  <main id="main"><div class="empty">Select sources and run a scan.</div></main>
 </div>
 <script>
 const $ = s => document.querySelector(s);
 const el = (tag, attrs = {}, ...kids) => {
   const n = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
-    if (k === 'class') n.className = v; else if (k === 'on') for (const [e, f] of Object.entries(v)) n.addEventListener(e, f);
+    if (v == null || v === false) continue;
+    if (k === 'class') n.className = v;
+    else if (k === 'on') for (const [e, f] of Object.entries(v)) n.addEventListener(e, f);
+    else if (k === 'checked' || k === 'selected' || k === 'disabled') n[k] = !!v;
     else n.setAttribute(k, v);
   }
-  for (const k of kids.flat()) if (k != null && k !== false) n.append(k instanceof Node ? k : String(k));
+  for (const k of kids.flat(Infinity)) if (k != null && k !== false) n.append(k instanceof Node ? k : String(k));
   return n;
 };
 const api = async (path, body) => {
-  const r = await fetch(path, body ? {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(body)} : {});
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok && !j.error) j.error = 'HTTP ' + r.status;
-  return j;
+  try {
+    const r = await fetch(path, body ? {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(body)} : {});
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok && !j.error) j.error = 'HTTP ' + r.status;
+    return j;
+  } catch (e) { return {error: 'dashboard server unreachable'}; }
 };
-const fmt = iso => { const d = new Date(iso); return isNaN(d) ? iso : d.toLocaleString(); };
-let current = null, fb = {}, showAll = false, filter = {host: '', imp: ''}, tab = 'findings';
+const store = {get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+               set: (k, v) => { try { localStorage.setItem(k, v); } catch {} }};
+
+// ---------- time formatting (precise, sortable)
+let utc = store.get('tz', 'utc') === 'utc';
+const pad = n => String(n).padStart(2, '0');
+function ts(iso) {
+  const d = new Date(iso); if (isNaN(d)) return iso || '—';
+  if (utc) return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}Z`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+function rate(f) {
+  if (f.count < 2) return '—';
+  const span = (new Date(f.last) - new Date(f.first)) / 1000;
+  if (span <= 0) return `${f.count}/<1s`;
+  const ph = f.count / span * 3600;
+  return ph >= 60 ? `${(ph / 60).toFixed(1)}/min` : ph >= 1 ? `${ph.toFixed(1)}/h` : `${(ph * 24).toFixed(1)}/d`;
+}
+function span(f) {
+  const s = (new Date(f.last) - new Date(f.first)) / 1000;
+  if (!(s > 0)) return '0s';
+  const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60), x = Math.floor(s % 60);
+  return [d && d + 'd', h && h + 'h', m && m + 'm', !d && x && x + 's'].filter(Boolean).join(' ');
+}
+const LV = ['critical', 'high', 'medium', 'low', 'noise'];
+const impOf = s => s >= 100 ? 'critical' : s >= 75 ? 'high' : s >= 50 ? 'medium' : 'low';
+
+// ---------- state
+let current = null, fb = {}, tab = store.get('tab', 'findings'), openKey = null;
+let q = '', hostF = '', levels = new Set(LV.slice(0, 4)), sortBy = {k: 'imp', d: 1}, showAll = false;
 
 async function init() {
+  document.documentElement.dataset.theme = store.get('theme', 'dark');
+  $('#tz').textContent = utc ? 'UTC' : 'LOCAL';
   const cfg = await api('/api/config');
-  const prov = cfg.llm?.provider || 'none';
-  $('#llmBadge').textContent = prov === 'none' ? 'LLM: off (rules only)' : `LLM: ${prov}${cfg.llm.model ? ' · ' + cfg.llm.model : ''}`;
-  if (prov === 'none') $('#useLlm').checked = false;
+  if (cfg.error) { $('#main').replaceChildren(el('div', {class: 'empty'}, cfg.error)); return; }
   if (cfg.window) $('#window').value = cfg.window;
-  const box = $('#sources');
-  if (!cfg.sources.length) box.append(el('div', {class: 'warn'}, 'No sources configured. Add [[sources]] to ', cfg.config_path || 'logagent.toml', '.'));
+  const box = $('#sources'); box.replaceChildren();
+  if (!cfg.sources.length) box.append(el('div', {class: 'lbl'}, 'no [[sources]] in ', cfg.config_path || 'logagent.toml'));
   for (const s of cfg.sources) box.append(el('label', {class: 'src'},
-    el('input', {type: 'checkbox', value: s.name, checked: ''}),
-    el('span', {}, s.name, el('small', {}, s.type + (s.detail ? ' · ' + s.detail : '')))));
+    el('input', {type: 'checkbox', value: s.name, checked: s.enabled}),
+    el('span', {}, el('span', {class: 'tag'}, s.type), s.name, el('div', {class: 't'}, s.detail || ''))));
+  $('#srcCount').textContent = cfg.sources.length;
+  await status();
+  setInterval(status, 15000);
   await loadHistory(true);
   pollJob();
+}
+
+async function status() {
+  const s = await api('/api/status');
+  if (s.error) { $('#mDot').className = 'dot offline'; $('#mName').textContent = 'dashboard offline'; return; }
+  const m = s.model || {};
+  $('#mDot').className = 'dot ' + m.state;
+  $('#mName').textContent = s.llm.provider === 'none' ? 'disabled' : `${s.llm.model || s.llm.provider}`;
+  $('#mDetail').textContent = m.state === 'online' ? ` ${m.latency_ms}ms` + (s.llm.mode ? ` · ${s.llm.mode}` : '') : m.state === 'offline' ? ' OFFLINE → rules only' : '';
+  $('#mDetail').title = m.detail || '';
+  $('#adm').textContent = s.admin ? 'admin' : 'user (Security log skipped)';
+  $('#adm').style.color = s.admin ? 'var(--ok)' : 'var(--warn)';
+  $('#sch').textContent = s.schedule?.every ? `every ${s.schedule.every} · next ${s.schedule.next ? ts(s.schedule.next) : '—'}` : 'manual';
+  if (s.llm.provider === 'none' || m.state === 'offline') $('#useLlm').checked = false;
 }
 
 async function loadHistory(openLatest) {
   const scans = await api('/api/scans');
   const h = $('#history'); h.replaceChildren();
-  if (!scans.length) { h.append(el('div', {class: 'empty'}, 'No scans yet')); return; }
-  for (const s of scans) h.append(el('a', {href: '#' + s.id, class: current?.id === s.id ? 'active' : '', on: {click: e => { e.preventDefault(); openScan(s.id); }}},
-    fmt(s.created), el('small', {}, `${s.flagged} flagged · ${s.headline || ''}`)));
+  $('#histCount').textContent = scans.length || '';
+  if (!scans.length) { h.append(el('div', {class: 'empty'}, 'no scans')); return; }
+  for (const s of scans) h.append(el('a', {href: '#' + s.id, class: current?.id === s.id ? 'active' : '',
+    on: {click: e => { e.preventDefault(); openScan(s.id); }}},
+    el('span', {}, ts(s.created)), el('span', {class: 'lbl'}, `${s.flagged}⚑ ${s.events}ev`),
+    el('span', {class: 'm'}, s.headline || '')));
   const want = location.hash.slice(1) || (openLatest && scans[0].id);
-  if (want && (!current || current.id !== want)) openScan(want);
+  if (want && (!current || current.id !== want)) await openScan(want);
 }
 
 async function openScan(id) {
   const s = await api('/api/scans/' + encodeURIComponent(id));
   if (s.error) return;
   fb = await api('/api/feedback/' + encodeURIComponent(id));
-  current = s; history.replaceState(null, '', '#' + id);
+  if (fb.error) fb = {};
+  current = s; openKey = null;
+  history.replaceState(null, '', '#' + id);
   document.querySelectorAll('.hist a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + id));
   render();
 }
 
-function render() {
-  const s = current, a = s.analysis || {}, st = s.stats || {};
-  const byKey = Object.fromEntries((s.findings || []).map(f => [f.key, f]));
-  const m = $('#main'); m.replaceChildren();
+// Merge the model/rules verdicts with the raw cluster metadata, one row per finding.
+function rows() {
+  const s = current, a = s.analysis || {};
+  const byKey = Object.fromEntries([...(s.findings || []), ...(s.others || [])].map(f => [f.key, f]));
+  const out = [];
+  const used = new Set();
+  for (const f of a.findings || []) {
+    const raws = (f.keys || []).map(k => byKey[k]).filter(Boolean);
+    if (!raws.length) continue;
+    raws.forEach(r => used.add(r.key));
+    const p = raws[0];
+    out.push({imp: (f.importance || 'low').toLowerCase(), title: f.title, why: f.why, action: f.action, what: f.what, related: f.related,
+      host: f.host || p.host, source: p.source, program: p.program, event_id: p.event_id, raws, keys: raws.map(r => r.key),
+      count: raws.reduce((n, r) => n + r.count, 0), first: raws.map(r => r.first).sort()[0], last: raws.map(r => r.last).sort().at(-1),
+      score: Math.max(...raws.map(r => r.score)), novel: raws.some(r => r.novel)});
+  }
+  for (const d of a.dismissed || []) {
+    for (const k of d.keys || []) { const p = byKey[k]; if (!p || used.has(k)) continue; used.add(k);
+      out.push({imp: 'noise', title: p.rule?.title || p.template.slice(0, 90), why: d.reason, action: '', host: p.host, source: p.source,
+        program: p.program, event_id: p.event_id, raws: [p], keys: [k], count: p.count, first: p.first, last: p.last, score: p.score, novel: p.novel}); }
+  }
+  if (showAll) for (const p of [...(s.findings || []), ...(s.others || [])]) {
+    if (used.has(p.key)) continue;
+    out.push({imp: p.score >= 30 ? impOf(p.score) : 'noise', title: p.rule?.title || p.template.slice(0, 90), why: p.rule?.why || '', action: p.rule?.action || '',
+      host: p.host, source: p.source, program: p.program, event_id: p.event_id, raws: [p], keys: [p.key], count: p.count,
+      first: p.first, last: p.last, score: p.score, novel: p.novel, unreviewed: true});
+  }
+  return out;
+}
 
-  const top = el('div', {class: 'card'},
+function render() {
+  const s = current, a = s.analysis || {}, st = s.stats || {}, meta = a._meta || {};
+  const m = $('#main'); m.replaceChildren();
+  const all = rows();
+  const cnt = l => (a.findings || []).filter(f => (f.importance || '').toLowerCase() === l).length;
+  const reviewer = meta.provider === 'none' || !meta.provider ? 'rules only' : `${meta.model || meta.provider}${meta.mode ? ' (' + meta.mode + ')' : ''}`;
+
+  m.append(el('div', {class: 'head'},
     el('p', {class: 'headline'}, a.headline || 'Scan complete'),
     a.summary ? el('p', {class: 'summary'}, a.summary) : null,
-    el('div', {class: 'tiles'},
-      tile(st.events ?? 0, 'events read'), tile(st.clusters ?? 0, 'distinct patterns'),
-      tile(st.flagged ?? 0, 'worth a look'), tile((st.hosts || []).length, 'hosts'),
-      tile(s.duration_s + 's', 'scan time'), tile(Object.keys(fb).length, 'labeled by you')),
-    ...(s.warnings || []).map(w => el('div', {class: 'warn'}, '⚠ ' + w)),
-    el('div', {class: 'summary', style: 'margin-top:8px;font-size:12px'},
-      `${fmt(s.created)} · window ${st.window} · reviewed by ${a._meta?.provider === 'none' ? 'rules only' : (a._meta?.provider + (a._meta?.model ? ' ' + a._meta.model : ''))}`));
-  m.append(top);
+    el('div', {class: 'meta'},
+      el('span', {}, 'scan ', el('b', {}, s.id)), el('span', {}, 'at ', el('b', {}, ts(s.created))),
+      el('span', {}, 'window ', el('b', {}, st.window)), el('span', {}, 'took ', el('b', {}, s.duration_s + 's')),
+      el('span', {}, 'reviewed by ', el('b', {}, reviewer)),
+      el('span', {}, 'hosts ', el('b', {}, (st.hosts || []).join(', ') || '—')))));
+  if (s.llm_error) m.append(el('div', {class: 'alert'}, '⚠ model review failed, fell back to rules: ' + s.llm_error));
+  for (const w of s.warnings || []) if (w !== '[llm] ' + s.llm_error) m.append(el('div', {class: 'alert'}, '⚠ ' + w));
+
+  const sev = st.by_severity || {}, totalSev = Object.values(sev).reduce((x, y) => x + y, 0) || 1;
+  const sevColors = {emerg: 'var(--crit)', alert: 'var(--crit)', crit: 'var(--crit)', err: 'var(--high)', warning: 'var(--med)', notice: 'var(--low)', info: 'var(--line2)', debug: 'var(--line)'};
+  m.append(el('div', {class: 'kpis'},
+    kpi(st.events, 'events'), kpi(st.clusters, 'patterns'), kpi(st.flagged, 'scored ≥ threshold'),
+    kpi(cnt('critical'), 'critical', 'crit'), kpi(cnt('high'), 'high', 'high'), kpi(cnt('medium'), 'medium', 'med'), kpi(cnt('low'), 'low', 'low'),
+    kpi((a.dismissed || []).length, 'dismissed'), kpi(Object.keys(fb).length, 'labeled')));
+  m.append(el('div', {class: 'sevbar', title: Object.entries(sev).map(([k, v]) => `${k}: ${v}`).join('  ')},
+    ...['emerg', 'alert', 'crit', 'err', 'warning', 'notice', 'info', 'debug'].filter(k => sev[k]).map(k =>
+      el('span', {style: `width:${sev[k] / totalSev * 100}%;background:${sevColors[k]}`}))));
 
   const tabs = el('div', {class: 'tabs'});
-  tabs.append(...[['findings', 'Findings'], ['raw', 'All flagged patterns'], ['ask', 'Ask the LLM']].map(([k, t]) =>
-    el('button', {class: tab === k ? 'on' : '', on: {click: () => { tab = k; render(); }}}, t)));
+  for (const [k, t] of [['findings', `Findings [${all.length}]`], ['sources', 'Sources'], ['query', 'Query model']])
+    tabs.append(el('button', {class: tab === k ? 'on' : '', on: {click: () => { tab = k; store.set('tab', k); render(); }}}, t));
   m.append(tabs);
 
-  if (tab === 'findings') {
-    const fs = a.findings || [];
-    const hosts = [...new Set(fs.map(f => f.host).filter(Boolean))];
-    const sel = (opts, key, label) => el('select', {'aria-label': label, on: {change: e => { filter[key] = e.target.value; render(); }}},
-      el('option', {value: ''}, label), ...opts.map(o => { const op = el('option', {value: o}, o); if (filter[key] === o) op.selected = true; return op; }));
-    m.append(el('div', {class: 'filters'}, sel(hosts, 'host', 'All hosts'), sel(['critical', 'high', 'medium', 'low'], 'imp', 'Any importance')));
-    const shown = fs.filter(f => (!filter.host || f.host === filter.host) && (!filter.imp || f.importance === filter.imp));
-    if (!shown.length) m.append(el('div', {class: 'card empty'}, fs.length ? 'Nothing matches the filter.' : 'Nothing needs your attention in this window.'));
-    for (const f of shown) {
-      const imp = (f.importance || 'low').toLowerCase();
-      const raws = (f.keys || []).map(k => byKey[k]).filter(Boolean);
-      m.append(el('div', {class: 'finding ' + imp},
-        el('h3', {}, el('span', {class: 'pill ' + imp}, imp), f.title, el('span', {class: 'host'}, f.host || '')),
-        el('dl', {},
-          f.what ? [el('dt', {}, 'What'), el('dd', {}, f.what)] : null,
-          f.why ? [el('dt', {}, 'Why'), el('dd', {}, f.why)] : null,
-          f.action ? [el('dt', {}, 'Do'), el('dd', {}, f.action)] : null,
-          f.related ? [el('dt', {}, 'Related'), el('dd', {}, f.related)] : null),
-        raws.length ? el('details', {}, el('summary', {}, `Evidence (${raws.reduce((n, r) => n + r.count, 0)} events)`),
-          ...raws.map(r => el('div', {},
-            el('div', {class: 'summary', style: 'font-size:12px;margin-top:6px'},
-              `${r.source} · ${r.program}${r.event_id ? ' #' + r.event_id : ''} · ${r.count}× · ${fmt(r.first)} → ${fmt(r.last)}${r.novel ? ' · NEW' : ''}`),
-            ...r.samples.map(x => el('pre', {}, x))))) : null,
-        raws.length ? fbControls(raws.map(r => r.key), imp) : null));
-    }
-    if ((a.dismissed || []).length) m.append(el('details', {class: 'card'}, el('summary', {}, `Dismissed as noise (${a.dismissed.length})`),
-      ...a.dismissed.map(d => el('p', {}, el('b', {}, (d.keys || []).map(k => byKey[k]?.rule?.title || byKey[k]?.template?.slice(0, 60) || k).join(', ')), ': ', d.reason))));
-  } else if (tab === 'raw') {
-    const t = el('table', {}, el('tr', {}, ...['Score', 'Host', 'Source', 'Count', 'Rule', 'Latest message', 'Your label'].map(h => el('th', {}, h))));
-    const rows = (s.findings || []).concat(showAll ? (s.others || []) : []);
-    for (const f of rows) t.append(el('tr', {},
-      el('td', {}, f.score + (f.novel ? ' ★' : '')), el('td', {}, f.host), el('td', {}, f.source + (f.event_id ? ' #' + f.event_id : '')),
-      el('td', {}, f.count), el('td', {}, f.rule?.title || '—'), el('td', {class: 'msg'}, f.samples[0]?.slice(0, 300) || ''),
-      el('td', {}, fbControls([f.key], impOf(f.score)))));
-    m.append(el('label', {class: 'src'}, (() => { const c = el('input', {type: 'checkbox', on: {change: e => { showAll = e.target.checked; render(); }}}); c.checked = showAll; return c; })(),
-      `Also show ${(s.others || []).length} lower-scored patterns (label anything the rules missed)`));
-    m.append(el('div', {class: 'card', style: 'overflow-x:auto'}, rows.length ? t : el('div', {class: 'empty'}, 'No events scored above the threshold.'),
-      el('p', {class: 'summary', style: 'font-size:12px'}, '★ = first time this pattern was seen on that host.')));
-  } else {
-    const q = el('textarea', {rows: 3, placeholder: 'e.g. Is the under-voltage on the Pi related to the SD card errors? What should I fix first?'});
-    const out = el('div', {class: 'answer'});
-    const btn = el('button', {on: {click: async () => {
-      if (!q.value.trim()) return;
-      btn.disabled = true; out.textContent = 'Thinking…';
-      const r = await api('/api/ask', {scan_id: s.id, question: q.value});
-      out.textContent = r.answer || ('Error: ' + r.error); btn.disabled = false;
-    }}}, 'Ask');
-    m.append(el('div', {class: 'card'}, el('h2', {}, 'Ask about this scan'), q, el('div', {class: 'row'}, btn), out));
-  }
+  if (tab === 'findings') renderFindings(m, all);
+  else if (tab === 'sources') renderSources(m);
+  else renderQuery(m);
 }
-function fbControls(keys, defImp) {
-  const cur = fb[keys[0]] || {};
-  const imp = el('select', {'aria-label': 'Importance', on: {change: () => send('useful', imp.value)}},
-    ...['critical', 'high', 'medium', 'low'].map(o => { const op = el('option', {value: o}, o); if ((cur.importance || defImp) === o) op.selected = true; return op; }));
+const kpi = (v, l, c) => el('div', {class: 'kpi ' + (c || '')}, el('div', {class: 'v'}, v ?? 0), el('div', {class: 'l'}, l));
+
+function renderFindings(m, all) {
+  const hosts = [...new Set(all.map(r => r.host))].sort();
+  const search = el('input', {type: 'text', placeholder: 'grep: host, program, event id, text…', value: q,
+    on: {input: e => { q = e.target.value; const pos = e.target.selectionStart; render(); const i = document.querySelector('.tools input[type=text]'); i.focus(); i.setSelectionRange(pos, pos); }}});
+  m.append(el('div', {class: 'tools'}, search,
+    el('select', {'aria-label': 'Host', on: {change: e => { hostF = e.target.value; render(); }}},
+      el('option', {value: ''}, 'all hosts'), ...hosts.map(h => el('option', {value: h, selected: h === hostF}, h))),
+    ...LV.map(l => el('button', {class: `chip ${l} ${levels.has(l) ? 'on' : ''}`, on: {click: () => { levels.has(l) ? levels.delete(l) : levels.add(l); render(); }}}, l)),
+    el('label', {class: 'chk', style: 'margin:0'}, el('input', {type: 'checkbox', checked: showAll, on: {change: e => { showAll = e.target.checked; render(); }}}),
+      `+ unreviewed patterns (${(current.others || []).length + (current.findings || []).length})`)));
+
+  const ql = q.toLowerCase();
+  let list = all.filter(r => levels.has(r.imp) && (!hostF || r.host === hostF) &&
+    (!ql || [r.title, r.host, r.source, r.program, r.event_id, r.why, ...r.raws.flatMap(x => x.samples)].join(' ').toLowerCase().includes(ql)));
+  const key = {imp: r => LV.indexOf(r.imp) * 1000 - r.score, title: r => r.title, host: r => r.host, source: r => r.source + r.program,
+    event_id: r => r.event_id, count: r => -r.count, rate: r => -(r.count / Math.max(1, new Date(r.last) - new Date(r.first))),
+    first: r => r.first, last: r => r.last, score: r => -r.score}[sortBy.k];
+  list.sort((x, y) => { const a = key(x), b = key(y); return (a < b ? -1 : a > b ? 1 : 0) * sortBy.d; });
+
+  if (!list.length) { m.append(el('div', {class: 'empty'}, all.length ? 'no rows match the filter' : 'nothing flagged in this window')); return; }
+  const cols = [['imp', 'sev'], ['title', 'finding'], ['host', 'host'], ['source', 'source / program'], ['event_id', 'id'],
+    ['count', 'n'], ['rate', 'rate'], ['first', 'first'], ['last', 'last'], ['score', 'score'], [null, 'label']];
+  const t = el('table', {}, el('tr', {}, ...cols.map(([k, l]) => el('th', {class: (sortBy.k === k ? 'sorted' : '') + (['first', 'rate'].includes(k) ? ' hide-sm' : ''),
+    on: {click: () => { if (!k) return; sortBy = sortBy.k === k ? {k, d: -sortBy.d} : {k, d: 1}; render(); }}},
+    l, sortBy.k === k ? (sortBy.d > 0 ? ' ▾' : ' ▴') : ''))));
+  for (const r of list) {
+    const id = r.keys.join(','), open = openKey === id, lab = fb[r.keys[0]];
+    t.append(el('tr', {class: 'r' + (open ? ' open' : ''), on: {click: () => { openKey = open ? null : id; render(); }}},
+      el('td', {}, el('span', {class: 'sev ' + r.imp}, r.imp)),
+      el('td', {class: 'title'}, r.title, r.novel ? el('span', {class: 'new', title: 'first time this pattern appeared on this host'}, 'NEW') : null,
+        r.unreviewed ? el('span', {class: 'lbl', style: 'margin-left:6px'}, '(unreviewed)') : null),
+      el('td', {}, r.host), el('td', {class: 'msg'}, `${r.source} / ${r.program || '—'}`), el('td', {}, r.event_id || '—'),
+      el('td', {class: 'n'}, r.count), el('td', {class: 'n hide-sm'}, rate(r)),
+      el('td', {class: 'ts hide-sm'}, ts(r.first)), el('td', {class: 'ts'}, ts(r.last)), el('td', {class: 'n'}, r.score.toFixed(1)),
+      el('td', {}, lab ? el('span', {class: 'lbl ' + lab.verdict}, lab.verdict === 'noise' ? 'noise' : '✓ ' + (lab.importance || '')) : el('span', {class: 'lbl'}, '—'))));
+    if (open) t.append(el('tr', {class: 'detail'}, el('td', {colspan: cols.length}, detail(r))));
+  }
+  m.append(t);
+}
+
+function detail(r) {
+  const p = r.raws[0];
+  const kv = (pairs) => el('div', {class: 'kv'}, ...pairs.filter(([, v]) => v !== '' && v != null).flatMap(([k, v]) => [el('span', {}, k), el('span', {}, String(v))]));
+  return el('div', {class: 'dgrid'},
+    el('div', {},
+      el('dl', {class: 'prose'},
+        r.why ? [el('dt', {}, 'assessment'), el('dd', {}, r.why)] : null,
+        r.action ? [el('dt', {}, 'action'), el('dd', {}, r.action)] : null,
+        r.related ? [el('dt', {}, 'correlation'), el('dd', {}, r.related)] : null),
+      fbControls(r)),
+    el('div', {},
+      kv([['occurrences', r.count], ['first seen', ts(r.first)], ['last seen', ts(r.last)], ['span', span(r)], ['rate', rate(r)],
+          ['host', r.host], ['source', p.source], ['program', p.program], ['event id', p.event_id], ['max severity', p.severity],
+          ['pre-score', r.score.toFixed(1) + (p.reasons?.length ? '  (' + p.reasons.join('; ') + ')' : '')],
+          ['rule', p.rule ? `${p.rule.id}  [${p.rule.category}]` : 'none'], ['new on host', r.novel ? 'yes' : 'no'],
+          ['cluster', r.keys.join(', ')], ...Object.entries(p.fields || {}).slice(0, 16).map(([k, v]) => ['· ' + k, v])]),
+      el('div', {class: 'h', style: 'margin-top:12px'}, el('span', {}, 'template')),
+      el('pre', {class: 'sample'}, p.template),
+      el('div', {class: 'h', style: 'margin-top:12px'}, el('span', {}, `samples (${r.raws.reduce((n, x) => n + x.samples.length, 0)} distinct, newest first)`)),
+      ...r.raws.flatMap(x => x.samples.map(sm => el('pre', {class: 'sample'}, sm)))));
+}
+
+function fbControls(r) {
+  const cur = fb[r.keys[0]] || {};
+  const imp = el('select', {'aria-label': 'importance', on: {change: () => send('useful', imp.value)}},
+    ...LV.slice(0, 4).map(o => el('option', {value: o, selected: (cur.importance || (r.imp === 'noise' ? 'medium' : r.imp)) === o}, o)));
   const send = async (verdict, importance) => {
-    const again = cur.verdict === verdict && importance === undefined;
-    for (const key of keys) {
-      const r = await api('/api/feedback', {scan_id: current.id, key, verdict: again ? null : verdict, importance: again ? null : (verdict === 'useful' ? (importance || imp.value) : null)});
-      if (r.error) { alert(r.error); return; }
-      if (again) delete fb[key]; else fb[key] = r;
+    const clear = cur.verdict === verdict && importance === undefined;
+    for (const key of r.keys) {
+      const res = await api('/api/feedback', {scan_id: current.id, key, verdict: clear ? null : verdict,
+        importance: clear || verdict !== 'useful' ? null : (importance || imp.value)});
+      if (res.error) { alert(res.error); return; }
+      if (clear) delete fb[key]; else fb[key] = res;
     }
     render();
   };
-  return el('div', {class: 'fb'}, 'Teach your model:',
-    el('button', {class: 'useful' + (cur.verdict === 'useful' ? ' on' : ''), on: {click: () => send('useful')}}, '👍 worth knowing'),
-    el('button', {class: 'noise' + (cur.verdict === 'noise' ? ' on' : ''), on: {click: () => send('noise')}}, '👎 noise'),
-    cur.verdict === 'noise' ? null : imp);
+  return el('div', {class: 'fb', on: {click: e => e.stopPropagation()}}, el('span', {class: 'k'}, 'train'),
+    el('button', {class: 'useful' + (cur.verdict === 'useful' ? ' on' : ''), on: {click: () => send('useful')}}, '✓ relevant'),
+    cur.verdict === 'noise' ? null : imp,
+    el('button', {class: 'noise' + (cur.verdict === 'noise' ? ' on' : ''), on: {click: () => send('noise')}}, '✕ noise'));
 }
-const impOf = score => score >= 100 ? 'critical' : score >= 75 ? 'high' : score >= 50 ? 'medium' : 'low';
-const tile = (v, l) => el('div', {class: 'tile'}, el('b', {}, v), el('span', {}, l));
+
+function renderSources(m) {
+  const st = current.stats || {};
+  const t = el('table', {}, el('tr', {}, el('th', {}, 'source'), el('th', {}, 'type'), el('th', {}, 'events')));
+  for (const s of current.sources || []) {
+    const name = s.name || s.type;
+    t.append(el('tr', {}, el('td', {}, name), el('td', {}, s.type + (s.host ? ' · ' + s.host : s.path ? ' · ' + s.path : '')),
+      el('td', {class: 'n'}, (st.per_source || {})[name] ?? 0)));
+  }
+  const sev = st.by_severity || {};
+  const t2 = el('table', {}, el('tr', {}, el('th', {}, 'severity'), el('th', {}, 'events')),
+    ...['emerg', 'alert', 'crit', 'err', 'warning', 'notice', 'info', 'debug'].filter(k => sev[k]).map(k => el('tr', {}, el('td', {}, k), el('td', {class: 'n'}, sev[k]))));
+  const t3 = el('table', {}, el('tr', {}, el('th', {}, 'rule'), el('th', {}, 'patterns')),
+    ...Object.entries(st.rule_hits || {}).map(([k, v]) => el('tr', {}, el('td', {}, k), el('td', {class: 'n'}, v))));
+  m.append(el('div', {class: 'pad'}, el('div', {class: 'h'}, el('span', {}, 'per source')), t),
+           el('div', {class: 'pad'}, el('div', {class: 'h'}, el('span', {}, 'by severity')), t2),
+           el('div', {class: 'pad'}, el('div', {class: 'h'}, el('span', {}, 'rule hits')), t3));
+}
+
+function renderQuery(m) {
+  const qa = el('textarea', {rows: 3, placeholder: 'e.g. Which finding is most likely to cause data loss, and what is the exact first step?'});
+  const out = el('div', {class: 'answer'});
+  const btn = el('button', {class: 'btn', on: {click: async () => {
+    if (!qa.value.trim()) return;
+    btn.disabled = true; out.textContent = 'querying model…';
+    const r = await api('/api/ask', {scan_id: current.id, question: qa.value});
+    out.textContent = r.answer || ('error: ' + r.error); btn.disabled = false;
+  }}}, 'QUERY');
+  m.append(el('div', {class: 'pad'}, el('div', {class: 'h'}, el('span', {}, 'free-form question about this scan')), qa, btn, out));
+}
 
 $('#scanBtn').addEventListener('click', async () => {
   const sources = [...document.querySelectorAll('#sources input:checked')].map(i => i.value);
+  if (!sources.length) { $('#joblog').textContent = 'select at least one source'; return; }
   const r = await api('/api/scan', {sources, window: $('#window').value, use_llm: $('#useLlm').checked});
-  if (!r.started) $('#joblog').textContent = r.error || 'A scan is already running.';
+  if (!r.started) $('#joblog').textContent = r.error || 'a scan is already running';
   pollJob();
 });
+$('#tz').addEventListener('click', () => { utc = !utc; store.set('tz', utc ? 'utc' : 'local'); $('#tz').textContent = utc ? 'UTC' : 'LOCAL'; if (current) render(); loadHistory(); status(); });
+$('#theme').addEventListener('click', () => { const t = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = t; store.set('theme', t); });
 
 let polling = false;
 async function pollJob() {
@@ -265,17 +470,21 @@ async function pollJob() {
   try {
     for (;;) {
       const j = await api('/api/job');
+      if (j.error && !('running' in j)) { $('#joblog').textContent = j.error; break; }
       $('#scanBtn').disabled = j.running;
-      $('#scanBtn').textContent = j.running ? 'Scanning…' : 'Scan now';
-      $('#joblog').textContent = (j.log || []).slice(-12).join('\n') + (j.error ? '\nERROR: ' + j.error : '');
+      $('#scanBtn').textContent = j.running ? 'SCANNING…' : 'RUN SCAN';
+      $('#joblog').textContent = (j.log || []).slice(-14).join('\n') + (j.error ? '\nERROR ' + j.error : '') || 'idle';
+      $('#joblog').scrollTop = 1e9;
       if (!j.running) {
-        if (j.scan_id && current?.id !== j.scan_id) { location.hash = j.scan_id; await loadHistory(); await openScan(j.scan_id); }
+        if (j.scan_id && current?.id !== j.scan_id) { history.replaceState(null, '', '#' + j.scan_id); await loadHistory(); await openScan(j.scan_id); }
         break;
       }
       await new Promise(r => setTimeout(r, 1000));
     }
   } finally { polling = false; }
 }
+// pick up scans started by the scheduler
+setInterval(async () => { const j = await api('/api/job'); if (j.running) pollJob(); }, 10000);
 init();
 </script>
 </body>

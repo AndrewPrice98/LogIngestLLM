@@ -24,6 +24,33 @@ mkdir -p data
 
 url_ok() { curl -sf --max-time 2 "$1" >/dev/null 2>&1; }
 python=$(command -v python3 || command -v python)
+dash="http://127.0.0.1:$port/"
+
+# Started from the desktop shortcut, the terminal closes on exit: keep it open on failure so the error is readable.
+pause_on_error() {
+    local rc=${1:-$?}
+    if [ "$rc" -ne 0 ] && [ "$rc" -ne 130 ] && [ -t 0 ]; then
+        read -r -p "logagent stopped with an error (exit $rc). Press Enter to close. " _ || true
+    fi
+}
+trap pause_on_error EXIT
+
+open_browser() {
+    [ -n "$no_browser" ] && return
+    { command -v xdg-open >/dev/null && xdg-open "$dash"; } >/dev/null 2>&1 ||
+        { command -v open >/dev/null && open "$dash"; } >/dev/null 2>&1 || true
+}
+
+# --- already running? open it instead of starting a second copy
+if url_ok "${dash}api/status"; then
+    echo "[dashboard] already running at $dash - opening it"
+    open_browser
+    exit 0
+fi
+if (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then
+    echo "[dashboard] port $port is in use by another program. Free it or use --port <n>." >&2
+    exit 1
+fi
 
 # --- model server
 model_pid=""
@@ -51,10 +78,12 @@ fi
 
 ui_pid=""
 cleanup() {
+    local rc=$?
     if [ -n "$ui_pid" ] && kill -0 "$ui_pid" 2>/dev/null; then kill "$ui_pid"; wait "$ui_pid" 2>/dev/null || true; fi
     if [ -n "$model_pid" ] && kill -0 "$model_pid" 2>/dev/null; then
         kill "$model_pid"; wait "$model_pid" 2>/dev/null || true; echo "[model] stopped"
     fi
+    pause_on_error "$rc"
 }
 trap cleanup EXIT
 trap 'exit 130' INT TERM HUP

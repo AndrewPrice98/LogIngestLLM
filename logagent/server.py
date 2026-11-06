@@ -14,7 +14,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse
 
-from . import __version__, engine, feedback, llm
+from . import __version__, engine, feedback, llm, locations
 from .collectors.sources import parse_window
 
 STATIC = Path(__file__).parent / "static"
@@ -70,13 +70,19 @@ def src_name(s: dict) -> str:
 def make_handler(cfg: dict, job: Job, sched: dict):
     def public_sources():
         return [{"name": src_name(s), "type": s.get("type"), "enabled": s.get("enabled", True),
-                 "detail": s.get("host") or s.get("path") or ",".join(s.get("channels", []) or [])}
+                 "detail": s.get("host") or s.get("path") or ",".join(s.get("channels", []) or s.get("units", []) or [])}
                 for s in cfg.get("sources", [])]
 
     def start_scan(body: dict):
+        """body: sources=[names] of configured sources, or specs=[ad-hoc source specs] (picked files/units)."""
         names = body.get("sources")
-        srcs = [s for s in cfg.get("sources", [])
-                if (src_name(s) in names if names is not None else s.get("enabled", True))]
+        if body.get("specs") is not None:
+            srcs = [locations.validate_source(sp) for sp in body["specs"]][:200]
+            if not srcs:
+                raise ValueError("pick at least one log")
+        else:
+            srcs = [s for s in cfg.get("sources", [])
+                    if (src_name(s) in names if names is not None else s.get("enabled", True))]
         with job.lock:
             if job.running:
                 return False
@@ -88,7 +94,8 @@ def make_handler(cfg: dict, job: Job, sched: dict):
 
         def work():
             try:
-                scan = engine.run_scan(cfg, srcs, body.get("window"), bool(body.get("use_llm", True)), progress)
+                scan = engine.run_scan(cfg, srcs, body.get("window"), bool(body.get("use_llm", True)), progress,
+                                       summarize=bool(body.get("summarize")), label=str(body.get("label") or "")[:120] or None)
                 with job.lock:
                     job.scan_id = scan["id"]
             except Exception as exc:  # surface any failure in the UI instead of dying silently
@@ -149,6 +156,14 @@ def make_handler(cfg: dict, job: Job, sched: dict):
                 return self._send(200, feedback.for_scan(cfg, path.rsplit("/", 1)[-1]))
             if path == "/api/job":
                 return self._send(200, job.snapshot())
+            if path == "/api/system":
+                return self._send(200, locations.system_info())
+            if path == "/api/sources":
+                return self._send(200, {"sources": cfg.get("sources", []), "config_path": cfg.get("_path")})
+            if path == "/api/discover":
+                if cfg.get("_allow_any_host"):
+                    return self._send(403, {"error": "file browsing is disabled when the dashboard is network-reachable"})
+                return self._send(200, locations.discover(cfg))
             return self._send(404, {"error": "not found"})
 
         def do_POST(self):
@@ -160,9 +175,25 @@ def make_handler(cfg: dict, job: Job, sched: dict):
             except (ValueError, json.JSONDecodeError):
                 return self._send(400, {"error": "bad json"})
             path = urlparse(self.path).path
-            if path == "/api/scan":
-                ok = start_scan(body)
-                return self._send(202 if ok else 409, {"started": ok})
+            if path in ("/api/sources", "/api/sources/test", "/api/browse") or (path == "/api/scan" and "specs" in body):
+                if cfg.get("_allow_any_host"):
+                    return self._send(403, {"error": "editing sources and picking files is disabled when the "
+                                                     "dashboard is network-reachable"})
+            try:
+                if path == "/api/sources":
+                    return self._send(200, {"sources": locations.save_sources(cfg, body.get("sources")),
+                                            "config_path": cfg.get("_path")})
+                if path == "/api/sources/test":
+                    return self._send(200, locations.test_source(cfg, locations.validate_source(body.get("source"))))
+                if path == "/api/browse":
+                    return self._send(200, locations.browse(locations.validate_source(body.get("source"))))
+                if path == "/api/scan":
+                    ok = start_scan(body)
+                    return self._send(202 if ok else 409, {"started": ok})
+            except ValueError as exc:
+                return self._send(400, {"error": str(exc)})
+            except OSError as exc:
+                return self._send(500, {"error": f"{type(exc).__name__}: {exc}"})
             if path == "/api/feedback":
                 sid, key = str(body.get("scan_id", "")), str(body.get("key", ""))
                 if not engine.load_scan(cfg, sid) or not key.isalnum():

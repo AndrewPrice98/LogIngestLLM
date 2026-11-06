@@ -103,7 +103,7 @@ td.msg{color:var(--muted);word-break:break-word;font-size:11.5px}
 .lbl{font-size:10.5px;color:var(--dim)}
 .lbl.useful{color:var(--ok)}.lbl.noise{color:var(--crit)}
 /* ---------- detail */
-.detail td{padding:0;background:var(--panel)!important;cursor:default}
+.detail>td{padding:0;background:var(--panel)!important;cursor:default}
 .dgrid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:0;border-left:2px solid var(--accent)}
 .dgrid>div{padding:12px 16px;min-width:0}
 .dgrid>div+div{border-left:1px solid var(--line)}
@@ -128,6 +128,26 @@ pre.sample{margin:6px 0 0;background:var(--bg);border:1px solid var(--line);padd
 .btn{background:var(--accent);color:#031015;border:0;padding:6px 14px;font-weight:700;border-radius:2px;cursor:pointer;margin-top:8px}
 .btn:disabled{opacity:.5}
 td.title{min-width:200px}
+/* ---------- log locations */
+.mini{background:none;border:1px solid var(--line2);color:var(--muted);padding:0 6px;cursor:pointer;border-radius:2px;font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+.mini:hover{color:var(--text);border-color:var(--accent)}
+.mini.on{color:var(--accent);border-color:var(--accent)}
+.mini.danger:hover{color:var(--crit);border-color:var(--crit)}
+td.act{white-space:nowrap;text-align:right}
+td.act .mini{margin-left:4px}
+.form{display:grid;grid-template-columns:120px minmax(0,560px);gap:6px 12px;align-items:center;padding:12px 18px}
+.form label{color:var(--dim);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+.form .hint{grid-column:2;color:var(--dim);font-size:11px;margin-top:-3px}
+.form .row{grid-column:2;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn.sec{background:none;border:1px solid var(--line2);color:var(--muted)}
+.result{font-size:11.5px;color:var(--muted);white-space:pre-wrap;word-break:break-word}
+.result.ok{color:var(--ok)}.result.bad{color:var(--crit)}
+.picker{border-left:2px solid var(--accent);background:var(--panel)}
+.picker .tools{border-bottom:1px solid var(--line)}
+.picker table th{top:0}
+tr.dis td{color:var(--dim)}
+.sumbox{padding:12px 18px;border-bottom:1px solid var(--line);background:var(--panel2)}
+.sumbox pre{margin:6px 0 0;white-space:pre-wrap;font:13px/1.55 var(--sans);max-width:120ch}
 @media (max-width:1250px){.hide-sm{display:none}}
 @media (max-width:900px){.wrap{grid-template-columns:1fr;height:auto}aside{border-right:0;border-bottom:1px solid var(--line)}.dgrid{grid-template-columns:1fr}.dgrid>div+div{border-left:0;border-top:1px solid var(--line)}.hide-sm{display:none}}
 </style>
@@ -144,16 +164,17 @@ td.title{min-width:200px}
 <div class="wrap">
   <aside>
     <div class="sec">
-      <div class="h"><span>Sources</span><span id="srcCount"></span></div>
+      <div class="h"><span>Sources <span id="srcCount"></span></span><button class="mini" id="locBtn" title="Add, edit, discover, and pick individual log files">log locations</button></div>
       <div id="sources"></div>
     </div>
     <div class="sec">
       <div class="h"><span>Window</span></div>
       <select id="window" aria-label="Time window">
         <option value="1h">1h</option><option value="6h">6h</option><option value="24h" selected>24h</option>
-        <option value="3d">3d</option><option value="7d">7d</option><option value="30d">30d</option>
+        <option value="3d">3d</option><option value="7d">7d</option><option value="30d">30d</option><option value="all">all</option>
       </select>
       <label class="chk"><input type="checkbox" id="useLlm" checked> model review</label>
+      <label class="chk" title="Also write a summary of everything collected, aware of the OS it came from"><input type="checkbox" id="summarize"> summarize whole log</label>
       <button class="run" id="scanBtn">RUN SCAN</button>
       <pre class="console" id="joblog">idle</pre>
     </div>
@@ -215,24 +236,39 @@ const impOf = s => s >= 100 ? 'critical' : s >= 75 ? 'high' : s >= 50 ? 'medium'
 
 // ---------- state
 let current = null, fb = {}, tab = store.get('tab', 'findings'), openKey = null;
+let sys = {}, view = 'scan', locTab = 'configured', srcs = [], cfgPath = null;
 let q = '', hostF = '', levels = new Set(LV.slice(0, 4)), sortBy = {k: 'imp', d: 1}, showAll = false;
 
 async function init() {
   document.documentElement.dataset.theme = store.get('theme', 'dark');
   $('#tz').textContent = utc ? 'UTC' : 'LOCAL';
+  sys = await api('/api/system');
+  if (sys.error) sys = {};
   const cfg = await api('/api/config');
   if (cfg.error) { $('#main').replaceChildren(el('div', {class: 'empty'}, cfg.error)); return; }
   if (cfg.window) $('#window').value = cfg.window;
-  const box = $('#sources'); box.replaceChildren();
-  if (!cfg.sources.length) box.append(el('div', {class: 'lbl'}, 'no [[sources]] in ', cfg.config_path || 'logagent.toml'));
-  for (const s of cfg.sources) box.append(el('label', {class: 'src'},
-    el('input', {type: 'checkbox', value: s.name, checked: s.enabled}),
-    el('span', {}, el('span', {class: 'tag'}, s.type), s.name, el('div', {class: 't'}, s.detail || ''))));
-  $('#srcCount').textContent = cfg.sources.length;
+  renderSourceList(cfg);
+  const full = await api('/api/sources'); srcs = full.sources || []; cfgPath = full.config_path;
   await status();
   setInterval(status, 15000);
   await loadHistory(true);
   pollJob();
+}
+
+function renderSourceList(cfg) {
+  const box = $('#sources'); box.replaceChildren();
+  if (!cfg.sources.length) box.append(el('div', {class: 'lbl'}, 'no sources yet: open ', el('a', {href: '#', on: {click: e => { e.preventDefault(); openLocations(); }}}, 'log locations')));
+  for (const s of cfg.sources) box.append(el('label', {class: 'src'},
+    el('input', {type: 'checkbox', value: s.name, checked: s.enabled}),
+    el('span', {}, el('span', {class: 'tag'}, s.type), s.name, el('div', {class: 't'}, s.detail || ''))));
+  $('#srcCount').textContent = cfg.sources.length ? `[${cfg.sources.length}]` : '';
+}
+
+async function refreshSources() {
+  const cfg = await api('/api/config');
+  if (!cfg.error) renderSourceList(cfg);
+  const full = await api('/api/sources');
+  if (!full.error) { srcs = full.sources || []; cfgPath = full.config_path; }
 }
 
 async function status() {
@@ -243,21 +279,25 @@ async function status() {
   $('#mName').textContent = s.llm.provider === 'none' ? 'disabled' : `${s.llm.model || s.llm.provider}`;
   $('#mDetail').textContent = m.state === 'online' ? ` ${m.latency_ms}ms` + (s.llm.mode ? ` · ${s.llm.mode}` : '') : m.state === 'offline' ? ' OFFLINE → rules only' : '';
   $('#mDetail').title = m.detail || '';
-  $('#adm').textContent = s.admin ? 'admin' : 'user (Security log skipped)';
-  $('#adm').style.color = s.admin ? 'var(--ok)' : 'var(--warn)';
+  $('#adm').textContent = s.admin ? (sys.os === 'Windows' ? 'admin' : 'root') : sys.os === 'Windows' ? 'user (Security log skipped)' : sys.journal_system === false ? 'user (system journal not readable)' : 'user';
+  $('#adm').style.color = s.admin || sys.os !== 'Windows' && sys.journal_system !== false ? 'var(--ok)' : 'var(--warn)';
   $('#sch').textContent = s.schedule?.every ? `every ${s.schedule.every} · next ${s.schedule.next ? ts(s.schedule.next) : '—'}` : 'manual';
   if (s.llm.provider === 'none' || m.state === 'offline') $('#useLlm').checked = false;
 }
+
+const histItem = s => el('a', {href: '#' + s.id, class: view === 'scan' && current?.id === s.id ? 'active' : '',
+  on: {click: e => { e.preventDefault(); openScan(s.id); }}},
+  el('span', {}, ts(s.created)), el('span', {class: 'lbl'}, `${s.flagged}⚑ ${s.events}ev`),
+  el('span', {class: 'm'}, (s.label ? '⎘ ' + s.label + ' · ' : '') + (s.headline || '')));
 
 async function loadHistory(openLatest) {
   const scans = await api('/api/scans');
   const h = $('#history'); h.replaceChildren();
   $('#histCount').textContent = scans.length || '';
-  if (!scans.length) { h.append(el('div', {class: 'empty'}, 'no scans')); return; }
-  for (const s of scans) h.append(el('a', {href: '#' + s.id, class: current?.id === s.id ? 'active' : '',
-    on: {click: e => { e.preventDefault(); openScan(s.id); }}},
-    el('span', {}, ts(s.created)), el('span', {class: 'lbl'}, `${s.flagged}⚑ ${s.events}ev`),
-    el('span', {class: 'm'}, s.headline || '')));
+  if (!scans.length) h.append(el('div', {class: 'empty'}, 'no scans'));
+  for (const s of scans) h.append(histItem(s));
+  if (location.hash === '#locations') { if (view !== 'locations') openLocations(); return; }
+  if (!scans.length) return;
   const want = location.hash.slice(1) || (openLatest && scans[0].id);
   if (want && (!current || current.id !== want)) await openScan(want);
 }
@@ -267,7 +307,7 @@ async function openScan(id) {
   if (s.error) return;
   fb = await api('/api/feedback/' + encodeURIComponent(id));
   if (fb.error) fb = {};
-  current = s; openKey = null;
+  current = s; openKey = null; view = 'scan'; showAll = !!s.label;
   history.replaceState(null, '', '#' + id);
   document.querySelectorAll('.hist a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + id));
   render();
@@ -304,6 +344,8 @@ function rows() {
 }
 
 function render() {
+  if (view === 'locations') return renderLocations();
+  if (!current) { $('#main').replaceChildren(el('div', {class: 'empty'}, 'Select sources and run a scan, or open log locations to pick files.')); return; }
   const s = current, a = s.analysis || {}, st = s.stats || {}, meta = a._meta || {};
   const m = $('#main'); m.replaceChildren();
   const all = rows();
@@ -317,7 +359,17 @@ function render() {
       el('span', {}, 'scan ', el('b', {}, s.id)), el('span', {}, 'at ', el('b', {}, ts(s.created))),
       el('span', {}, 'window ', el('b', {}, st.window)), el('span', {}, 'took ', el('b', {}, s.duration_s + 's')),
       el('span', {}, 'reviewed by ', el('b', {}, reviewer)),
-      el('span', {}, 'hosts ', el('b', {}, (st.hosts || []).join(', ') || '—')))));
+      el('span', {}, 'hosts ', el('b', {}, (st.hosts || []).join(', ') || '—')),
+      s.label ? el('span', {}, 'logs ', el('b', {}, s.label)) : null,
+      st.os ? el('span', {}, 'origin os ', el('b', {}, st.os.origin + (st.os.origin_detail ? ' / ' + st.os.origin_detail : ''))) : null)));
+  if (s.summary) {
+    const o = s.summary.origin || {};
+    m.append(el('div', {class: 'sumbox'},
+      el('div', {class: 'h'}, el('span', {}, `whole-log summary · ${s.summary.by === 'rules' ? 'rules only' : 'by ' + s.summary.by}`),
+        el('span', {title: (o.evidence || []).join('\n')}, `origin ${o.os || '?'}${o.detail ? ' / ' + o.detail : ''} (${o.confidence || '?'} confidence) · viewer ${s.summary.viewer || '?'}`)),
+      el('pre', {}, s.summary.text),
+      s.summary.error ? el('div', {class: 'lbl', style: 'margin-top:6px;color:var(--warn)'}, 'model summary failed, showing rules summary: ' + s.summary.error) : null));
+  }
   if (s.llm_error) m.append(el('div', {class: 'alert'}, '⚠ model review failed, fell back to rules: ' + s.llm_error));
   for (const w of s.warnings || []) if (w !== '[llm] ' + s.llm_error) m.append(el('div', {class: 'alert'}, '⚠ ' + w));
 
@@ -454,19 +506,312 @@ function renderQuery(m) {
   m.append(el('div', {class: 'pad'}, el('div', {class: 'h'}, el('span', {}, 'free-form question about this scan')), qa, btn, out));
 }
 
+// ---------- log locations: configure, discover, browse, pick files to analyze
+const TYPE_INFO = {files: 'folder, glob or file; format detected per file', journald: 'systemd journal on this machine',
+  syslog: 'syslog-format text files', app: 'your application logs (text or JSON lines)', windows: 'live Windows Event Log channels',
+  evtx: 'exported .evtx / .xml event log', ssh: 'Raspberry Pi / Jetson / Linux box over SSH (key login)'};
+const PATH_HINT = {Linux: '/var/log   ~/myapp/logs/*.log   /var/log/nginx/error.log',
+  macOS: '~/Library/Logs   /var/log/system.log   ~/myapp/logs/*.log',
+  Windows: 'C:\\ProgramData\\MyApp\\logs   %LOCALAPPDATA%\\MyApp\\*.log   D:\\exports\\System.evtx'};
+const fmtBytes = n => n == null ? '—' : n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : n < 1073741824 ? (n / 1048576).toFixed(1) + ' MB' : (n / 1073741824).toFixed(2) + ' GB';
+const where = s => s.path || s.host || (s.channels || []).join(', ') || (s.units || []).join(', ') || (s.type === 'journald' ? 'entire journal' : '—');
+const baseName = p => p.split(/[\\/]/).filter(Boolean).pop() || p;
+function uniqueName(base, taken) {
+  const t = new Set(taken.map(x => x.toLowerCase())); let n = base, i = 2;
+  while (t.has(n.toLowerCase())) n = `${base} (${i++})`;
+  return n;
+}
+let editIdx = null, form = null, picker = null, disc = null, testRes = {}, confirmDel = null, locMsg = null;
+
+function openLocations() {
+  view = 'locations'; history.replaceState(null, '', '#locations');
+  document.querySelectorAll('.hist a').forEach(a => a.classList.remove('active'));
+  renderLocations();
+}
+
+async function saveSources(list) {
+  const r = await api('/api/sources', {sources: list});
+  if (r.error) { locMsg = {bad: true, text: r.error}; renderLocations(); return false; }
+  srcs = r.sources; cfgPath = r.config_path; locMsg = {text: `saved ${srcs.length} source(s) to ${r.config_path} (previous version: ${r.config_path}.bak)`};
+  await refreshSources();
+  renderLocations();
+  return true;
+}
+
+function renderLocations() {
+  const m = $('#main'); m.replaceChildren();
+  m.append(el('div', {class: 'head'},
+    el('p', {class: 'headline'}, 'Log locations'),
+    el('p', {class: 'summary'}, 'Where logagent looks for logs. Add or discover locations, then browse one to pick specific logs for the model to parse, rank and summarize.'),
+    el('div', {class: 'meta'}, el('span', {}, 'os ', el('b', {}, sys.pretty || '?')), el('span', {}, 'host ', el('b', {}, sys.hostname || '?')),
+      el('span', {}, 'config ', el('b', {}, cfgPath || 'logagent.toml')), el('span', {}, 'source types on this os ', el('b', {}, (sys.types || []).join(' · '))))));
+  for (const n of sys.notes || []) m.append(el('div', {class: 'alert'}, 'ⓘ ' + n));
+  if (locMsg) m.append(el('div', {class: 'alert', style: locMsg.bad ? 'color:var(--crit)' : 'color:var(--ok)'}, (locMsg.bad ? '⚠ ' : '✓ ') + locMsg.text));
+  const tabs = el('div', {class: 'tabs'});
+  for (const [k, t] of [['configured', `Configured [${srcs.length}]`], ['discover', 'Discover'], ['add', '+ Add / open file']])
+    tabs.append(el('button', {class: locTab === k ? 'on' : '', on: {click: () => { locTab = k; editIdx = null; picker = null; locMsg = null; renderLocations(); }}}, t));
+  m.append(tabs);
+  if (locTab === 'configured') renderConfigured(m);
+  else if (locTab === 'discover') renderDiscover(m);
+  else renderAdd(m);
+}
+
+function renderConfigured(m) {
+  if (!srcs.length) { m.append(el('div', {class: 'empty'}, 'No log locations yet. Use Discover to find the ones on this machine, or Add one.')); return; }
+  const cols = 6;
+  const t = el('table', {}, el('tr', {}, ...['name', 'type', 'location', 'on', 'last test', ''].map(h => el('th', {}, h))));
+  srcs.forEach((s, i) => {
+    const avail = (sys.types || []).includes(s.type), tr = testRes[i];
+    t.append(el('tr', {class: 'r' + (picker?.key === 'src' + i || editIdx === i ? ' open' : '')},
+      el('td', {class: 'title'}, s.name),
+      el('td', {}, el('span', {class: 'tag'}, s.type), avail ? null : el('span', {class: 'lbl', style: 'color:var(--warn)'}, 'not on this os')),
+      el('td', {class: 'msg'}, where(s), s.format ? ` [${s.format}]` : '', s.device ? ` [${s.device}]` : ''),
+      el('td', {}, el('button', {class: 'mini' + (s.enabled === false ? '' : ' on'), title: 'include in RUN SCAN and scheduled scans',
+        on: {click: () => saveSources(srcs.map((x, j) => j === i ? {...x, enabled: x.enabled === false} : x))}}, s.enabled === false ? 'off' : 'on')),
+      el('td', {class: 'result' + (tr ? (tr.pending ? '' : tr.ok ? ' ok' : ' bad') : '')}, tr ? testLine(tr) : '—'),
+      el('td', {class: 'act'},
+        el('button', {class: 'mini' + (picker?.key === 'src' + i ? ' on' : ''), on: {click: () => togglePicker('src' + i, s)}}, 'browse / pick'),
+        el('button', {class: 'mini', on: {click: () => runTest(i, s)}}, 'test'),
+        el('button', {class: 'mini' + (editIdx === i ? ' on' : ''), on: {click: () => { editIdx = editIdx === i ? null : i; form = {...s}; picker = null; renderLocations(); }}}, 'edit'),
+        el('button', {class: 'mini danger', on: {click: () => {
+          if (confirmDel !== i) { confirmDel = i; renderLocations(); return; }
+          confirmDel = null; testRes = {}; editIdx = null; picker = null; saveSources(srcs.filter((_, j) => j !== i));
+        }}}, confirmDel === i ? 'confirm remove' : 'remove'))));
+    if (editIdx === i) t.append(el('tr', {class: 'detail'}, el('td', {colspan: cols}, sourceForm(form, async f => {
+      if (await saveSources(srcs.map((x, j) => j === i ? f : x))) editIdx = null; renderLocations(); }, () => { editIdx = null; renderLocations(); }))));
+    if (picker?.key === 'src' + i) t.append(el('tr', {class: 'detail'}, el('td', {colspan: cols}, pickerView())));
+  });
+  m.append(t);
+}
+
+function testLine(r) {
+  if (r.pending) return 'testing…';
+  if (!r.ok) return 'failed: ' + (r.error || 'unknown') + (r.files != null ? ` (${r.files} files)` : '');
+  return `${r.events} events in ${r.window}` + (r.files != null ? ` · ${r.files} files${r.unreadable ? `, ${r.unreadable} no access` : ''}` : '') +
+    (r.last ? ` · last ${ts(r.last)}` : '') + (r.warnings?.length ? ` · ${r.warnings.length} warning(s)` : '');
+}
+
+async function runTest(i, s) {
+  testRes[i] = {pending: true}; renderLocations();
+  testRes[i] = await api('/api/sources/test', {source: s});
+  if (testRes[i].error && !('ok' in testRes[i])) testRes[i] = {ok: false, error: testRes[i].error};
+  renderLocations();
+}
+
+function sourceForm(f, onSave, onCancel) {
+  const types = [...new Set([...(sys.types || []), f.type].filter(Boolean))];
+  const res = el('div', {class: 'result'});
+  const bind = (k, attrs = {}) => el('input', {type: 'text', value: Array.isArray(f[k]) ? f[k].join(', ') : (f[k] ?? ''), ...attrs,
+    on: {input: e => { f[k] = e.target.value; }}});
+  const fields = [el('label', {}, 'name'), bind('name', {placeholder: 'e.g. nginx, pi kitchen, myapp'}),
+    el('label', {}, 'type'), el('select', {on: {change: e => { f.type = e.target.value; renderLocations(); }}},
+      ...types.map(t => el('option', {value: t, selected: t === f.type}, t + ((sys.types || []).includes(t) ? '' : ' (not on this os)')))),
+    el('div', {class: 'hint'}, TYPE_INFO[f.type] || '')];
+  if (['files', 'syslog', 'app', 'evtx'].includes(f.type)) fields.push(el('label', {}, 'path'), bind('path', {placeholder: PATH_HINT[sys.os] || '/path/to/logs'}),
+    el('div', {class: 'hint'}, 'a folder (reads log files up to two levels down), a glob, or one file; ~ and env vars work'));
+  if (f.type === 'files') fields.push(el('label', {}, 'format'), el('select', {on: {change: e => { f.format = e.target.value; }}},
+    ...['auto', 'syslog', 'journal', 'app', 'evtx'].map(o => el('option', {value: o, selected: (f.format || 'auto') === o}, o))));
+  if (f.type === 'app') fields.push(el('label', {}, 'app name'), bind('app', {placeholder: 'optional, defaults to the file name'}));
+  if (f.type === 'windows') fields.push(el('label', {}, 'channels'), bind('channels', {placeholder: 'System, Application, Security'}));
+  if (f.type === 'journald') fields.push(el('label', {}, 'units'), bind('units', {placeholder: 'optional: nginx.service, sshd.service (empty = whole journal)'}));
+  if (f.type === 'ssh') fields.push(
+    el('label', {}, 'host'), bind('host', {placeholder: 'pi@raspberrypi.local'}),
+    el('div', {class: 'hint'}, 'key login first: ssh-copy-id ' + (f.host || 'pi@raspberrypi.local')),
+    el('label', {}, 'device'), el('select', {on: {change: e => { f.device = e.target.value; }}},
+      ...['linux', 'pi', 'jetson'].map(o => el('option', {value: o, selected: (f.device || 'linux') === o}, o))),
+    el('label', {}, 'port'), bind('port', {placeholder: '22'}),
+    el('label', {}, 'identity'), bind('identity', {placeholder: 'optional: ~/.ssh/id_ed25519'}),
+    el('label', {}, 'remote logs'), bind('logs', {placeholder: 'optional: /home/pi/myapp/*.log, /var/log/nginx/error.log'}));
+  fields.push(el('label', {}, 'enabled'), el('label', {class: 'chk', style: 'margin:0'}, el('input', {type: 'checkbox', checked: f.enabled !== false,
+    on: {change: e => { f.enabled = e.target.checked; }}}), 'include in RUN SCAN and scheduled scans'));
+  fields.push(el('span', {}), el('div', {class: 'row'},
+    el('button', {class: 'btn', on: {click: () => { const c = {...f}; if (c.enabled !== false) delete c.enabled; onSave(c); }}}, 'SAVE'),
+    el('button', {class: 'btn sec', on: {click: async () => { res.className = 'result'; res.textContent = 'testing…';
+      const r = await api('/api/sources/test', {source: f}); const ok = r.ok;
+      res.className = 'result ' + (ok ? 'ok' : 'bad'); res.textContent = ok ? testLine(r) + (r.sample ? '\nnewest: ' + r.sample : '') : 'failed: ' + r.error; }}}, 'TEST'),
+    el('button', {class: 'btn sec', on: {click: onCancel}}, 'CANCEL')), el('span', {}), res);
+  return el('div', {class: 'form', on: {click: e => e.stopPropagation()}}, ...fields);
+}
+
+async function togglePicker(key, spec) {
+  if (picker?.key === key) { picker = null; renderLocations(); return; }
+  editIdx = null;
+  picker = {key, spec, data: null, filter: '', picked: new Set(), msg: ''};
+  renderLocations();
+  const d = await api('/api/browse', {source: spec});
+  if (picker?.key !== key) return;
+  picker.data = d.error ? {kind: 'error', items: [], hint: d.error} : d;
+  if (picker.data.kind === 'files') { // preselect the newest readable file
+    const first = picker.data.items.find(x => x.readable && x.bytes > 0 && x.format !== 'binary');
+    if (first) picker.picked.add(first.path);
+  }
+  renderLocations();
+}
+
+function pickerView() {
+  const p = picker, d = p.data;
+  if (!d) return el('div', {class: 'pad picker'}, 'reading location…');
+  const win = el('select', {'aria-label': 'window', style: 'width:auto'}, ...['all', '30d', '7d', '24h', '6h', '1h'].map(w => el('option', {value: w}, w === 'all' ? 'whole file (all time)' : 'last ' + w)));
+  if (d.kind === 'units' || d.kind === 'channels' || d.kind === 'whole') win.value = $('#window').value;
+  const useLlm = el('input', {type: 'checkbox', checked: $('#useLlm').checked});
+  const sum = el('input', {type: 'checkbox', checked: true});
+  const count = el('span', {class: 'lbl'});
+  const go = el('button', {class: 'btn', style: 'margin:0'});
+  const msg = el('div', {class: 'result', style: 'padding:0 18px 8px'}, p.msg || '');
+  const body = el('tbody');
+  const itemKey = x => x.path || x.unit || x.channel;
+  const update = () => {
+    const n = p.picked.size;
+    count.textContent = d.kind === 'whole' ? '' : `${n} selected of ${d.items.length}`;
+    go.textContent = d.kind === 'files' ? `ANALYZE ${n || ''} FILE${n === 1 ? '' : 'S'}` : d.kind === 'units' ? (n ? `ANALYZE ${n} UNIT${n === 1 ? '' : 'S'}` : 'ANALYZE ENTIRE JOURNAL') :
+      d.kind === 'channels' ? `ANALYZE ${n} CHANNEL${n === 1 ? '' : 'S'}` : 'ANALYZE';
+    go.disabled = (d.kind === 'files' || d.kind === 'channels') && !n || d.kind === 'error';
+  };
+  const drawRows = () => {
+    body.replaceChildren();
+    const fl = p.filter.toLowerCase();
+    const items = d.items.filter(x => !fl || itemKey(x).toLowerCase().includes(fl));
+    for (const x of items.slice(0, 400)) {
+      const k = itemKey(x), ok = d.kind !== 'files' || (x.readable && x.format !== 'binary');
+      const cb = el('input', {type: 'checkbox', checked: p.picked.has(k), disabled: !ok,
+        on: {change: e => { e.target.checked ? p.picked.add(k) : p.picked.delete(k); update(); }}});
+      const cells = d.kind === 'files'
+        ? [el('td', {class: 'msg', style: 'color:var(--text)'}, x.name), el('td', {}, el('span', {class: 'tag'}, x.format)),
+           el('td', {class: 'n'}, fmtBytes(x.bytes)), el('td', {class: 'ts'}, ts(x.mtime)),
+           el('td', {class: 'lbl', style: ok ? '' : 'color:var(--warn)'}, !x.readable ? 'no access' : x.format === 'binary' ? 'binary' : 'ok')]
+        : [el('td', {class: 'msg', style: 'color:var(--text)'}, k)];
+      body.append(el('tr', {class: 'r' + (ok ? '' : ' dis'), on: {click: e => { if (e.target !== cb && ok) { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change')); } }}},
+        el('td', {style: 'width:24px'}, cb), ...cells));
+    }
+    if (items.length > 400) body.append(el('tr', {}, el('td', {colspan: 6, class: 'lbl'}, `${items.length - 400} more; narrow the filter`)));
+  };
+  go.addEventListener('click', async () => {
+    const r = await analyzePicked(p.spec, d.kind, [...p.picked], win.value, useLlm.checked, sum.checked);
+    if (r.error) { p.msg = '⚠ ' + r.error; msg.textContent = p.msg; msg.className = 'result bad'; }
+  });
+  const wrap = el('div', {class: 'picker', on: {click: e => e.stopPropagation()}});
+  if (d.hint) wrap.append(el('div', {class: 'alert'}, 'ⓘ ' + d.hint));
+  const tools = el('div', {class: 'tools'});
+  if (d.kind !== 'whole' && d.kind !== 'error') tools.append(
+    el('input', {type: 'text', placeholder: 'filter', value: p.filter, style: 'width:200px', on: {input: e => { p.filter = e.target.value; drawRows(); }}}),
+    el('button', {class: 'mini', on: {click: () => { const fl = p.filter.toLowerCase();
+      for (const x of d.items) if ((d.kind !== 'files' || (x.readable && x.format !== 'binary')) && (!fl || itemKey(x).toLowerCase().includes(fl))) p.picked.add(itemKey(x));
+      drawRows(); update(); }}}, 'select all'),
+    el('button', {class: 'mini', on: {click: () => { p.picked.clear(); drawRows(); update(); }}}, 'none'), count);
+  tools.append(el('span', {style: 'flex:1'}), win,
+    el('label', {class: 'chk', style: 'margin:0'}, useLlm, 'model review'),
+    el('label', {class: 'chk', style: 'margin:0', title: 'model writes an OS-aware summary of everything picked'}, sum, 'summarize'), go);
+  wrap.append(tools, msg);
+  if (d.kind === 'files' || d.kind === 'units' || d.kind === 'channels') {
+    const head = d.kind === 'files' ? ['', 'file', 'format', 'size', 'modified', 'access'] : ['', d.kind === 'units' ? 'systemd unit' : 'channel'];
+    wrap.append(el('table', {}, el('thead', {}, el('tr', {}, ...head.map(h => el('th', {}, h)))), body));
+    if (!d.items.length) wrap.append(el('div', {class: 'empty'}, d.kind === 'files' ? 'no log files at this location' : 'nothing listed'));
+  }
+  drawRows(); update();
+  return wrap;
+}
+
+async function analyzePicked(spec, kind, picks, window, useLlm, summarize) {
+  let specs, label;
+  if (kind === 'files') {
+    const taken = [];
+    specs = picks.map(path => {
+      const name = uniqueName(baseName(path), taken); taken.push(name);
+      const t = ['syslog', 'app', 'evtx'].includes(spec.type) ? spec.type : 'files';
+      return {name, type: t, path, ...(t === 'files' && spec.format ? {format: spec.format} : {}), ...(t === 'app' && spec.app ? {app: spec.app} : {})};
+    });
+    label = picks.slice(0, 3).map(baseName).join(', ') + (picks.length > 3 ? ` +${picks.length - 3} more` : '');
+  } else if (kind === 'units') {
+    specs = [{name: spec.name || 'journal', type: 'journald', ...(picks.length ? {units: picks} : {})}];
+    label = picks.length ? picks.slice(0, 3).join(', ') + (picks.length > 3 ? ` +${picks.length - 3} more` : '') : (spec.name || 'journal');
+  } else if (kind === 'channels') {
+    specs = [{...spec, channels: picks}]; label = picks.join(', ');
+  } else { specs = [spec]; label = spec.name; }
+  const r = await api('/api/scan', {specs, window, use_llm: useLlm, summarize, label});
+  if (r.error) return r;
+  if (!r.started) return {error: 'a scan is already running; wait for it to finish'};
+  view = 'scan';
+  $('#main').replaceChildren(el('div', {class: 'empty'}, `Analyzing ${label} … progress is in the console on the left.`));
+  pollJob(true);
+  return r;
+}
+
+async function renderDiscover(m) {
+  if (!disc) {
+    m.append(el('div', {class: 'empty'}, `searching for logs on ${sys.pretty || 'this machine'}…`));
+    disc = 'loading';
+    const r = await api('/api/discover');
+    disc = r.error ? {error: r.error} : r;
+    if (view === 'locations' && locTab === 'discover') renderLocations();
+    return;
+  }
+  if (disc === 'loading') { m.append(el('div', {class: 'empty'}, 'searching…')); return; }
+  if (disc.error) { m.append(el('div', {class: 'empty'}, disc.error)); return; }
+  m.append(el('div', {class: 'tools'}, el('span', {class: 'lbl'}, `${disc.candidates.length} location(s) found for ${disc.system.os}. Browse one to pick files now, or add it to your sources.`),
+    el('span', {style: 'flex:1'}), el('button', {class: 'mini', on: {click: () => { disc = null; renderLocations(); }}}, 'rescan')));
+  const cols = 7;
+  const t = el('table', {}, el('tr', {}, ...['name', 'type', 'location', 'files', 'size', 'newest', ''].map(h => el('th', {}, h))));
+  disc.candidates.forEach((c, i) => {
+    const s = c.spec, key = 'disc' + i;
+    const noAccess = c.files != null && c.readable === 0 || c.readable_ok === false;
+    t.append(el('tr', {class: 'r' + (picker?.key === key ? ' open' : '')},
+      el('td', {class: 'title'}, s.name, c.note ? el('div', {class: 'lbl'}, c.note) : null),
+      el('td', {}, el('span', {class: 'tag'}, s.type), s.device ? el('span', {class: 'tag'}, s.device) : null),
+      el('td', {class: 'msg'}, where(s)),
+      el('td', {class: 'n', style: noAccess ? 'color:var(--warn)' : ''}, c.files != null ? `${c.readable}/${c.files}` : '—', c.files != null ? el('div', {class: 'lbl'}, 'readable') : null),
+      el('td', {class: 'n'}, fmtBytes(c.bytes)), el('td', {class: 'ts'}, c.newest ? ts(c.newest) : '—'),
+      el('td', {class: 'act'},
+        el('button', {class: 'mini' + (picker?.key === key ? ' on' : ''), on: {click: () => togglePicker(key, s)}}, 'browse / pick'),
+        c.configured ? el('span', {class: 'lbl', style: 'margin-left:6px'}, 'added') :
+          el('button', {class: 'mini', on: {click: async () => {
+            if (await saveSources([...srcs, {...s, name: uniqueName(s.name, srcs.map(x => x.name))}])) { c.configured = true; renderLocations(); } }}}, 'add'))));
+    if (picker?.key === key) t.append(el('tr', {class: 'detail'}, el('td', {colspan: cols}, pickerView())));
+  });
+  m.append(t);
+}
+
+function renderAdd(m) {
+  if (!form || editIdx !== 'new') { form = {type: (sys.types || []).includes('files') ? 'files' : 'app', name: '', path: ''}; editIdx = 'new'; }
+  m.append(el('div', {class: 'pad'}, el('div', {class: 'h'}, el('span', {}, 'open one log file now (not saved)'))));
+  const path = el('input', {type: 'text', placeholder: (PATH_HINT[sys.os] || '/path/to/file.log').split('   ').pop(), style: 'max-width:560px'});
+  const res = el('div', {class: 'result', style: 'margin-top:6px'});
+  const open = async () => {
+    if (!path.value.trim()) return;
+    const spec = {name: baseName(path.value.trim()), type: 'files', path: path.value.trim()};
+    res.className = 'result'; res.textContent = 'reading…';
+    const d = await api('/api/browse', {source: spec});
+    if (d.error || !d.items?.length) { res.className = 'result bad'; res.textContent = d.error || 'no log files at that path'; return; }
+    locTab = 'discover'; disc = disc && disc !== 'loading' ? disc : {system: sys, candidates: []};
+    disc.candidates = [{spec, note: 'opened by path', files: d.items.length, readable: d.items.filter(x => x.readable).length,
+      bytes: d.items.reduce((n, x) => n + x.bytes, 0), newest: d.items[0]?.mtime}, ...disc.candidates.filter(c => c.note !== 'opened by path')];
+    picker = null; await togglePicker('disc0', spec);
+  };
+  path.addEventListener('keydown', e => { if (e.key === 'Enter') open(); });
+  m.append(el('div', {class: 'form', style: 'padding-top:0'}, el('label', {}, 'file or folder'), path,
+    el('div', {class: 'hint'}, 'opens the file picker for that path; nothing is added to your config'),
+    el('span', {}), el('div', {class: 'row'}, el('button', {class: 'btn', on: {click: open}}, 'OPEN')), el('span', {}), res));
+  m.append(el('div', {class: 'pad', style: 'border-top:1px solid var(--line)'}, el('div', {class: 'h'}, el('span', {}, 'add a log location'))));
+  m.append(sourceForm(form, async f => { if (await saveSources([...srcs, f])) { form = null; editIdx = null; locTab = 'configured'; renderLocations(); } },
+    () => { form = null; editIdx = null; locTab = 'configured'; renderLocations(); }));
+}
+
 $('#scanBtn').addEventListener('click', async () => {
   const sources = [...document.querySelectorAll('#sources input:checked')].map(i => i.value);
   if (!sources.length) { $('#joblog').textContent = 'select at least one source'; return; }
-  const r = await api('/api/scan', {sources, window: $('#window').value, use_llm: $('#useLlm').checked});
+  const r = await api('/api/scan', {sources, window: $('#window').value, use_llm: $('#useLlm').checked, summarize: $('#summarize').checked});
+  if (r.started) { view = 'scan'; if (current) render(); }
   if (!r.started) $('#joblog').textContent = r.error || 'a scan is already running';
-  pollJob();
+  pollJob(!!r.started);
 });
+$('#locBtn').addEventListener('click', () => openLocations());
 $('#tz').addEventListener('click', () => { utc = !utc; store.set('tz', utc ? 'utc' : 'local'); $('#tz').textContent = utc ? 'UTC' : 'LOCAL'; if (current) render(); loadHistory(); status(); });
 $('#theme').addEventListener('click', () => { const t = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = t; store.set('theme', t); });
 
 let polling = false;
-async function pollJob() {
+// Open the finished scan only if this page watched it run (or just started it), so a page load never jumps away.
+async function pollJob(started = false) {
   if (polling) return; polling = true;
+  let watched = started;
   try {
     for (;;) {
       const j = await api('/api/job');
@@ -475,8 +820,9 @@ async function pollJob() {
       $('#scanBtn').textContent = j.running ? 'SCANNING…' : 'RUN SCAN';
       $('#joblog').textContent = (j.log || []).slice(-14).join('\n') + (j.error ? '\nERROR ' + j.error : '') || 'idle';
       $('#joblog').scrollTop = 1e9;
+      if (j.running) watched = true;
       if (!j.running) {
-        if (j.scan_id && current?.id !== j.scan_id) { history.replaceState(null, '', '#' + j.scan_id); await loadHistory(); await openScan(j.scan_id); }
+        if (watched && j.scan_id && (view !== 'scan' || current?.id !== j.scan_id)) { history.replaceState(null, '', '#' + j.scan_id); await loadHistory(); await openScan(j.scan_id); }
         break;
       }
       await new Promise(r => setTimeout(r, 1000));

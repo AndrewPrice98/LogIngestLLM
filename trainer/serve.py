@@ -8,10 +8,14 @@ then in logagent.toml:
     base_url = "http://127.0.0.1:8081/v1"
     model = "logagent"
     mode = "triage"
+    summary_model = "logagent-base"   # whole-log summaries use the base model with your adapter switched off
+
+Model ids: "logagent" (base + your adapter) and "logagent-base" (same weights, adapter disabled for the request).
 """
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -43,7 +47,8 @@ def main():
 
         def do_GET(self):
             if self.path.rstrip("/").endswith("/models"):
-                return self._send(200, {"data": [{"id": "logagent", "object": "model"}]})
+                return self._send(200, {"data": [{"id": "logagent", "object": "model"},
+                                                 {"id": "logagent-base", "object": "model"}]})
             self._send(404, {"error": "not found"})
 
         def do_POST(self):
@@ -51,10 +56,13 @@ def main():
                 return self._send(404, {"error": "not found"})
             body = json.loads(self.rfile.read(int(self.headers.get("content-length", 0))) or b"{}")
             msgs = [{"role": m["role"], "content": m["content"]} for m in body.get("messages", [])]
-            with lock:
+            name = "logagent-base" if body.get("model") == "logagent-base" else "logagent"
+            no_adapter = model.disable_adapter() if name == "logagent-base" and hasattr(model, "disable_adapter") \
+                else contextlib.nullcontext()
+            with lock, no_adapter:
                 text = generate(tok, model, msgs, max_new_tokens=min(int(body.get("max_tokens") or 600), 2000),
                                 temperature=float(body.get("temperature") or 0))
-            self._send(200, {"object": "chat.completion", "model": "logagent",
+            self._send(200, {"object": "chat.completion", "model": name,
                              "choices": [{"index": 0, "message": {"role": "assistant", "content": text},
                                           "finish_reason": "stop"}], "usage": {}})
 

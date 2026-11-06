@@ -23,6 +23,13 @@ function Test-Url($url) {
     try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 $url | Out-Null; return $true } catch { return $false }
 }
 
+# --- already running? open it instead of starting a second copy (a second one would fail on the port)
+if (Test-Url "http://127.0.0.1:$Port/api/status") {
+    Write-Host "[dashboard] already running at http://127.0.0.1:$Port/ - opening it"
+    if (-not $NoBrowser) { Start-Process "http://127.0.0.1:$Port/" }
+    exit
+}
+
 # --- model server
 $model = $null
 $trainPy = Join-Path $PSScriptRoot '.venv-train\Scripts\python.exe'

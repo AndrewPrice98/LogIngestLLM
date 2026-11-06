@@ -18,6 +18,11 @@ def _print_report(scan: dict) -> None:
     print("=" * 72)
     if a.get("summary"):
         print(a["summary"], "\n")
+    if scan.get("summary"):
+        o = scan["summary"]["origin"]
+        print(f"--- whole-log summary ({scan['summary']['by']}; origin {o['os']}{' / ' + o['detail'] if o['detail'] else ''}, "
+              f"viewer {scan['summary']['viewer']})")
+        print(scan["summary"]["text"], "\n")
     print(f"{st['events']} events, {st['clusters']} patterns, {st['flagged']} flagged, hosts: {', '.join(st['hosts'])}\n")
     for f in a.get("findings", []):
         print(f"[{f.get('importance', '?').upper():8}] {f.get('title')}  ({f.get('host', '')})")
@@ -45,6 +50,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--file", action="append", metavar="TYPE:PATH",
                    help="ad-hoc file, e.g. syslog:/var/log/syslog, app:./app.log, evtx:System.evtx")
     s.add_argument("--no-llm", action="store_true")
+    s.add_argument("--summarize", action="store_true", help="also write an OS-aware summary of the whole log")
     s.add_argument("--json", action="store_true", help="print the full scan as JSON")
 
     sub.add_parser("check-llm", help="verify the configured LLM answers")
@@ -73,7 +79,7 @@ def main(argv: list[str] | None = None) -> int:
                 sources.append({"type": kind, "path": path, "name": f"{kind}:{Path(path).name}",
                                 **({"app": Path(path).stem} if kind == "app" else {})})
         scan = engine.run_scan(cfg, sources, args.window, not args.no_llm,
-                               progress=lambda m: print(m, file=sys.stderr))
+                               progress=lambda m: print(m, file=sys.stderr), summarize=args.summarize)
         if args.json:
             print(json.dumps(scan, indent=1, default=str))
         else:

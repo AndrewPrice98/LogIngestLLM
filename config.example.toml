@@ -19,6 +19,7 @@ timeout = 300
 # base_url = "http://127.0.0.1:8081/v1"
 # model = "logagent"
 # mode = "triage"                          # review each pattern separately (what it was trained on)
+# summary_model = "logagent-base"          # whole-log summaries with the adapter off (see README)
 
 # llama.cpp server / LM Studio / vLLM / text-generation-webui:
 # provider = "openai"
@@ -27,6 +28,8 @@ timeout = 300
 # api_key = ""                            # only if your server wants one
 
 # ---------------------------------------------------------------- sources
+# Easiest: manage these from the dashboard (LOG LOCATIONS: discover, add, test, pick files).
+# The two below are for Windows; on Linux use type = "journald", on macOS a "files" folder.
 [[sources]]
 name = "This PC"
 type = "windows"
@@ -51,6 +54,19 @@ channels = ["Microsoft-Windows-Windows Defender/Operational"]
 # type = "ssh"
 # host = "mreyes@jetson.local"
 # device = "jetson"
+
+# Any folder, glob or file; the format is detected per file (syslog, journald JSON, app/JSON lines, .evtx)
+# [[sources]]
+# name = "var log"
+# type = "files"
+# path = "/var/log"            # Windows: "C:/ProgramData/MyApp/logs", macOS: "~/Library/Logs"
+# format = "auto"              # or force: syslog | journal | app | evtx
+
+# The systemd journal on this machine (Linux)
+# [[sources]]
+# name = "This machine"
+# type = "journald"
+# units = ["nginx.service"]    # optional
 
 # Your own app logs (text or JSON lines; tracebacks are grouped)
 # [[sources]]

@@ -26,6 +26,18 @@ Settings live in `logagent.toml` (copied from `config.example.toml` on first run
 
 Same steps as the Windows launcher. Ctrl+C stops the dashboard and the model it started. On Linux the local systemd journal is a `journald` source, and no admin step is needed if your user can read the system journal (`wheel`/`adm`/`systemd-journal` group).
 
+## Log locations and picking a log
+
+Open **LOG LOCATIONS** (top of the sidebar) to manage where logagent looks, without editing the config by hand:
+
+- **Configured**: every source, with *browse / pick*, *test* (resolves the location and reads a sample), *edit*, *remove*, and an on/off switch for RUN SCAN and scheduled scans. Changes are written to `logagent.toml` (the previous version is kept as `logagent.toml.bak`; comments and the rest of the file stay as they were).
+- **Discover**: finds log locations for the OS you're on: the systemd journal, `/var/log`, app log folders under your home directory (Linux); `/var/log`, `~/Library/Logs` (macOS); Event Log channels, `ProgramData`/`AppData` log folders (Windows); and SSH hosts from `~/.ssh/config`. It shows how many files you can actually read.
+- **+ Add / open file**: add a location (a folder, glob or file; `type = "files"` detects syslog, journald JSON, app/JSON-lines and .evtx per file), or open one file by path without saving it.
+
+*Browse / pick* lists a location's files (format, size, modified time, whether you can read them), a journal's systemd units, or Windows channels. Pick one or more and press **ANALYZE**: the logs are parsed, every pattern is ranked (rules, then your model), and with *summarize* on, the model writes a whole-log summary: what produced the log, health, key events with UTC times, what the noise is, and next steps.
+
+The summary is OS-aware: logagent works out which OS produced the log (from the source type and the messages themselves: Windows paths and providers, systemd units, `com.apple.*`, Raspberry Pi under-voltage, Jetson `nvgpu`...) and which OS you're viewing it on, and commands are written for the right one (e.g. "ssh into the Pi first" when you're reading a Pi's log on your laptop). Files over 100 MB are read from their newest 100 MB.
+
 ## How it decides what's valuable
 
 1. **Collect** events from each source into one format (time, host, severity, program, message).
@@ -77,7 +89,9 @@ The agent can run on a model you train yourself: an open base model (Qwen3 4B In
    base_url = "http://127.0.0.1:8081/v1"
    model = "logagent"
    mode = "triage"      # the model reviews each pattern separately; this is what it was trained on
+   summary_model = "logagent-base"   # whole-log summaries: same weights with your adapter switched off
    ```
+   `serve.py` answers to two model ids: `logagent` (your adapter) and `logagent-base` (adapter off for that request). The adapter is trained for per-pattern triage JSON, so free-form summaries come out better from the base model.
 
 Repeat 1-4 as you label more. Each run is saved as a new version in `models/` with its eval score.
 
@@ -102,6 +116,7 @@ Nothing is installed on the device; it runs `journalctl` and a few read-only hea
 python -m logagent scan                                   # all configured sources
 python -m logagent scan --window 7d --source "This PC"
 python -m logagent scan --file syslog:/path/syslog --file app:./app.log --no-llm
+python -m logagent scan --file files:/var/log --window all  # folder, format detected per file
 python -m logagent scan --json > scan.json
 ```
 

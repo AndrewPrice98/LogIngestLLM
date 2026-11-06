@@ -46,6 +46,10 @@ def _parse_iso(ts: str) -> datetime | None:
         return None
 
 
+def is_syslog_line(line: str) -> bool:
+    return bool(_RFC5424.match(line) or _ISO_SYSLOG.match(line) or _RFC3164.match(line))
+
+
 def parse_syslog(lines: Iterable[str], default_host: str = "", year: int | None = None) -> Iterator[Event]:
     now = datetime.now().astimezone()
     year = year or now.year

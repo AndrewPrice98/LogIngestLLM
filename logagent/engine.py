@@ -8,7 +8,7 @@ from collections import Counter
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-from . import llm
+from . import llm, summary as summ
 from .analysis import Baseline, cluster_events, score_clusters, select_findings
 from .collectors.sources import collect, parse_window, SourceError
 from .collectors.windows import CollectorError
@@ -56,7 +56,7 @@ def _heuristic_report(findings: list[dict]) -> dict:
 
 
 def run_scan(cfg: dict, sources: list[dict] | None = None, window: str | None = None,
-             use_llm: bool = True, progress=print) -> dict:
+             use_llm: bool = True, progress=print, summarize: bool = False, label: str | None = None) -> dict:
     t0 = time.time()
     data_dir = Path(cfg["data_dir"])
     win = parse_window(window or cfg.get("window"))
@@ -70,14 +70,14 @@ def run_scan(cfg: dict, sources: list[dict] | None = None, window: str | None = 
 
     events, per_source = [], {}
     for spec in sources:
-        label = spec.get("name") or spec.get("type")
-        progress(f"collecting {label} ...")
+        src_label = spec.get("name") or spec.get("type")
+        progress(f"collecting {src_label} ...")
         n0 = len(events)
         try:
             events.extend(collect(spec, win, warn=warn))
         except (SourceError, CollectorError, OSError, KeyError) as exc:
-            warn(f"[{label}] {exc}")
-        per_source[label] = len(events) - n0
+            warn(f"[{src_label}] {exc}")
+        per_source[src_label] = len(events) - n0
 
     progress(f"{len(events)} events; clustering ...")
     clusters = cluster_events(events, rules)
@@ -96,6 +96,10 @@ def run_scan(cfg: dict, sources: list[dict] | None = None, window: str | None = 
         "hosts": sorted({e.host for e in events}), "per_source": per_source,
         "by_severity": dict(sev), "rule_hits": dict(Counter(c.rule.id for c in clusters if c.rule).most_common(20)),
     }
+    from .locations import system_info
+    viewer = system_info()
+    origin = summ.guess_origin(sources, events)
+    stats["os"] = {"viewer": viewer["pretty"], "origin": origin["os"], "origin_detail": origin["detail"]}
 
     analysis, llm_error = {}, None
     if use_llm and cfg["llm"].get("provider", "none") != "none" and findings:
@@ -112,12 +116,28 @@ def run_scan(cfg: dict, sources: list[dict] | None = None, window: str | None = 
         analysis = _heuristic_report(findings)
         analysis["_meta"] = {"provider": "none"}
 
+    file_summary = None
+    if summarize:
+        digest = summ.build_digest(sources, events, [c.to_dict() for c in clusters], analysis, viewer, origin)
+        file_summary = {"origin": origin, "viewer": viewer["pretty"], "by": "rules", "error": None}
+        if use_llm and cfg["llm"].get("provider", "none") != "none" and events:
+            progress("model summarizing the whole log ...")
+            try:
+                file_summary["text"], meta = llm.summarize(digest, cfg["llm"])
+                file_summary["by"] = meta.get("model") or meta.get("provider")
+            except (llm.LLMError, KeyError, ValueError, TimeoutError, OSError) as exc:
+                file_summary["error"] = str(exc)
+                warn(f"[summary] {exc}")
+        if not file_summary.get("text"):
+            file_summary["text"] = summ.heuristic_summary(digest)
+
     baseline.update(clusters)
     scan = {
         "id": datetime.now().strftime("%Y%m%d-%H%M%S"),
         "created": datetime.now(timezone.utc).isoformat(),
         "duration_s": round(time.time() - t0, 1),
         "sources": [{k: v for k, v in s.items() if k not in ("identity",)} for s in sources],
+        "label": label, "summary": file_summary,
         "stats": stats, "analysis": analysis, "findings": findings, "others": others,
         "warnings": warnings, "llm_error": llm_error,
     }
@@ -137,6 +157,7 @@ def list_scans(cfg: dict, limit: int = 50) -> list[dict]:
         except (OSError, json.JSONDecodeError):
             continue
         out.append({"id": s["id"], "created": s["created"], "headline": s["analysis"].get("headline", ""),
+                    "label": s.get("label"), "summarized": bool(s.get("summary")),
                     "flagged": s["stats"]["flagged"], "events": s["stats"]["events"],
                     "hosts": s["stats"]["hosts"], "provider": s["analysis"].get("_meta", {}).get("provider")})
     return out

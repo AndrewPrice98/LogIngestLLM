@@ -1,0 +1,35 @@
+{
+ "adapter": "D:\\Projects\\LogIngestionLLM\\models\\logagent-20261106-1138\\adapter",
+ "report": {
+  "all": {
+   "n": 100,
+   "valid_json": 1.0,
+   "exact": 0.87,
+   "within_one_level": 0.96,
+   "flag_precision": 0.986,
+   "flag_recall": 0.961
+  },
+  "synthetic": {
+   "n": 100,
+   "valid_json": 1.0,
+   "exact": 0.87,
+   "within_one_level": 0.96,
+   "flag_precision": 0.986,
+   "flag_recall": 0.961
+  },
+  "confusion(gold->pred)": {
+   "critical->critical": 10,
+   "critical->high": 4,
+   "high->high": 23,
+   "high->medium": 1,
+   "low->low": 12,
+   "low->noise": 2,
+   "medium->high": 1,
+   "medium->low": 3,
+   "medium->medium": 19,
+   "medium->noise": 1,
+   "noise->medium": 1,
+   "noise->noise": 23
+  }
+ }
+}

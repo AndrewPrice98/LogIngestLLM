@@ -1,0 +1,36 @@
+{
+ "adapter": "None",
+ "report": {
+  "all": {
+   "n": 100,
+   "valid_json": 1.0,
+   "exact": 0.33,
+   "within_one_level": 0.73,
+   "flag_precision": 0.76,
+   "flag_recall": 1.0
+  },
+  "synthetic": {
+   "n": 100,
+   "valid_json": 1.0,
+   "exact": 0.33,
+   "within_one_level": 0.73,
+   "flag_precision": 0.76,
+   "flag_recall": 1.0
+  },
+  "confusion(gold->pred)": {
+   "critical->critical": 8,
+   "critical->high": 4,
+   "critical->medium": 2,
+   "high->critical": 2,
+   "high->high": 11,
+   "high->medium": 11,
+   "low->low": 3,
+   "low->medium": 11,
+   "medium->critical": 1,
+   "medium->high": 12,
+   "medium->medium": 11,
+   "noise->low": 23,
+   "noise->medium": 1
+  }
+ }
+}

@@ -4,5 +4,6 @@ __pycache__/
 .pytest_cache/
 logagent.toml
 .venv-train/
-models/
 train_data/
+# trained adapters are committed via Git LFS; HF caches/checkpoints are not
+models/**/checkpoint-*/

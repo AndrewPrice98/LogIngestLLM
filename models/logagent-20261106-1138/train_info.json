@@ -1,0 +1,11 @@
+{
+ "base": "Qwen/Qwen3-4B-Instruct-2507",
+ "examples": 2314,
+ "epochs": 1.0,
+ "lr": 0.0002,
+ "rank": 16,
+ "steps": 45,
+ "minutes": 94.9,
+ "data": "D:\\Projects\\LogIngestionLLM\\train_data\\train.jsonl",
+ "resumed_from": null
+}

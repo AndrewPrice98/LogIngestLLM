@@ -79,6 +79,8 @@ RULE_ATTACK = {
     "win_defender_off": ["T1562.001"],
     "win_rdp_logon": ["T1021.001", "T1078"],
     "win_volsnap": ["T1490"],
+    "win_kerberoast": ["T1558.003"],
+    "win_kerberos_preauth_burst": ["T1110"],
     "lx_ssh_bruteforce": ["T1110.001", "T1021.004"],
     "lx_ssh_accepted": ["T1021.004", "T1078"],
     "lx_sudo_fail": ["T1548.003"],

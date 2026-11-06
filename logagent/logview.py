@@ -9,6 +9,7 @@ from __future__ import annotations
 import gzip
 import json
 import os
+import shutil
 import subprocess
 from collections import deque
 from datetime import datetime, timezone
@@ -150,9 +151,12 @@ def _win(loc: dict, record: int, before: int, after: int) -> dict:
         with open(path, encoding="utf-8", errors="replace") as fh:
             evs = list(windows.parse_events_xml(fh.read()))
     else:
-        args = ["qe", path, "/lf:true"] if path else ["qe", loc.get("channel") or "System"]
         try:
-            evs = list(windows.parse_events_xml(windows._run_wevtutil(args + [f"/q:{q}", "/f:RenderedXml"])))
+            if path and not shutil.which("wevtutil"):
+                evs = list(windows.read_evtx(path, None, lambda m: None))
+            else:
+                args = ["qe", path, "/lf:true"] if path else ["qe", loc.get("channel") or "System"]
+                evs = list(windows.parse_events_xml(windows._run_wevtutil(args + [f"/q:{q}", "/f:RenderedXml"])))
         except windows.CollectorError as exc:
             raise ViewError(str(exc)) from exc
     rows = []

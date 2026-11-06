@@ -29,6 +29,7 @@ local web dashboard and runs on **a model the owner trained himself**.
 | file | role |
 |---|---|
 | `collectors/windows.py` | `wevtutil qe ... /f:RenderedXml` → Events. Security channel needs admin. |
+| `collectors/evtx.py` | stdlib `.evtx` reader (chunks → BinXML → event XML) used when `wevtutil` is absent (Linux/macOS), by the collector and the log viewer. Without message templates, `windows._fallback_message()` writes the reference title + `Field Name: value` pairs so rules written for rendered text still match |
 | `collectors/textlogs.py` | syslog (RFC3164/5424/ISO), journald JSON, app logs (text or JSON lines, tracebacks folded) |
 | `collectors/sources.py` | source specs from config → events; `files` type = folder/glob/file with per-file `detect_format()`; files >100 MB read from the newest 100 MB; window `all`; local only (an `ssh` type in old configs raises a clear error) |
 | `signals.py` | ~50 rules (id, score, why, action) + `NOISE_RULES` (negative score = suppress). Rules support `event_ids`, `providers`, `pattern`, `exclude`, `max_severity`, `min_count` |

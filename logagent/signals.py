@@ -85,6 +85,17 @@ BUILTIN_RULES: list[Rule] = [
     R("win_rdp_logon", "Remote Desktop logon", "security", 45,
       "Interactive remote logons should be ones you expect.", "Confirm the source IP is yours.",
       event_ids=("4624",), pattern=r"Logon Type:\s*10\b"),
+    R("win_kerberoast", "Kerberoasting: RC4 service ticket requested", "security", 85,
+      "A service ticket was requested with weak RC4 encryption for a user-run service. Attackers do this to crack "
+      "the service account's password offline (Kerberoasting).",
+      "Check which account requested it (Account Name, Client Address) and whether that's expected; give service "
+      "accounts long random passwords or gMSAs, and disable RC4 for them.",
+      event_ids=("4769",), pattern=r"Ticket\s?Encryption\s?Type:\s*0x17\b", exclude=r"Service\s?Name:\s*(krbtgt|\S+\$)"),
+    R("win_kerberos_preauth_burst", "Many Kerberos pre-authentication failures", "security", 65,
+      "Lots of failed Kerberos logons usually means password guessing or spraying against the domain "
+      "(or one device with a stale password).",
+      "Look at the account names and client addresses: many accounts from one address = spraying.",
+      event_ids=("4771",), min_count=10),
     # ------------------------------------------------ Windows: stability / hardware
     R("win_unexpected_shutdown", "Unexpected shutdown / power loss", "stability", 75,
       "The system rebooted without shutting down cleanly: crash, freeze, or power loss.",
@@ -257,5 +268,11 @@ def load_rules(extra: list[dict] | None = None) -> list[Rule]:
     return rules
 
 
+# Built-in rules written for Linux / app log text. On Windows events they would match words inside rendered
+# messages and PowerShell script blocks (source code), so they don't apply there.
+_NOT_FOR_WINDOWS = ("lx_", "pi_", "jetson_", "thermal_", "app_")
+
+
 def match_rules(e: Event, rules: list[Rule]) -> list[Rule]:
-    return [r for r in rules if r.matches(e)]
+    win = e.source.startswith("windows")
+    return [r for r in rules if not (win and r.id.startswith(_NOT_FOR_WINDOWS)) and r.matches(e)]

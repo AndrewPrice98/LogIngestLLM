@@ -2,7 +2,7 @@
 
 Reads your logs, throws away the noise, and tells you the handful of things worth your attention, with why they matter and what to do.
 
-A **local-only log analyzer and analyst co-pilot**. Sources: **Windows Event Log**, **Linux syslog / journald**, **your own app logs** (text or JSON lines, stack traces grouped), **web server access logs**, and any log file or folder on this machine. Logs from other machines are analyzed by copying or exporting them here and opening them. Nothing leaves your computer.
+A **local-only log analyzer and analyst co-pilot**. Sources: **Windows Event Log**, **Linux syslog / journald**, **your own app logs** (text or JSON lines, stack traces grouped), **web server access logs**, and any log file or folder on this machine. Logs from other machines are analyzed by copying or exporting them here and opening them; exported Windows `.evtx` files are read on Linux and macOS too (built-in reader, no Windows tools needed). Nothing leaves your computer.
 
 Runs on your own LLM (Ollama, LM Studio, llama.cpp, vLLM...). Works with no LLM at all too, in rules-only mode.
 

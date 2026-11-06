@@ -5,6 +5,8 @@ exported .evtx / XML file. The Security channel needs an elevated prompt.
 """
 from __future__ import annotations
 
+import re
+import shutil
 import socket
 import subprocess
 import xml.etree.ElementTree as ET
@@ -53,6 +55,24 @@ def parse_events_xml(xml_text: str, source_label: str = "windows") -> Iterator[E
             yield e
 
 
+def _words(name: str) -> str:
+    """TicketEncryptionType -> Ticket Encryption Type (close to how Windows renders field labels)."""
+    return re.sub(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", " ", name)
+
+
+def _fallback_message(provider: str, event_id: str, data: dict) -> str:
+    from ..knowledge import SYSMON_EVENTS, WINDOWS_EVENTS
+    if "sysmon" in provider.lower() and event_id in SYSMON_EVENTS:
+        title = "Sysmon: " + SYSMON_EVENTS[event_id][0]
+    elif event_id in WINDOWS_EVENTS and event_id != "25":
+        title = WINDOWS_EVENTS[event_id][0]
+    else:
+        title = f"{provider} event {event_id}"
+    parts = [f"{_words(k)}: {' '.join(str(v).split())[:2000]}" for k, v in data.items()
+             if v not in ("", "-", None) and not k.startswith("param")]
+    return title + (". " + "  ".join(parts) if parts else "")
+
+
 def _text(node, path: str) -> str:
     found = node.find(path, NS)
     return (found.text or "").strip() if found is not None and found.text else ""
@@ -89,8 +109,8 @@ def _parse_one(ev: ET.Element, source_label: str) -> Event | None:
                 data[child.tag.split("}")[-1]] = child.text.strip()
 
     msg = _text(ev, "e:RenderingInfo/e:Message")
-    if not msg:
-        msg = "; ".join(f"{k}={v}" for k, v in data.items() if v) or f"{provider_name} event {event_id}"
+    if not msg:  # read without Windows (no message templates): describe it from the reference + its fields
+        msg = _fallback_message(provider_name, event_id, data)
 
     sev = _LEVEL.get(level, INFO)
     kw = _text(sysn, "e:Keywords")
@@ -109,6 +129,21 @@ def _parse_one(ev: ET.Element, source_label: str) -> Event | None:
     )
 
 
+def read_evtx(path: str, max_events: int | None = None, warn=print) -> Iterator[Event]:
+    from .evtx import EvtxError, read_records
+    batch: list[str] = []
+    try:
+        for _rid, xml in read_records(path, warn, max_events):
+            batch.append(xml)
+            if len(batch) >= 500:
+                yield from parse_events_xml("".join(batch))
+                batch = []
+    except EvtxError as exc:
+        raise CollectorError(str(exc)) from exc
+    if batch:
+        yield from parse_events_xml("".join(batch))
+
+
 def collect(channels: list[str] | None = None, since: timedelta = timedelta(hours=24),
             max_events: int = 5000, path: str | None = None,
             warn=print) -> Iterator[Event]:
@@ -117,6 +152,9 @@ def collect(channels: list[str] | None = None, since: timedelta = timedelta(hour
         p = Path(path)
         if p.suffix.lower() == ".xml":
             yield from parse_events_xml(p.read_text(encoding="utf-8", errors="replace"))
+            return
+        if not shutil.which("wevtutil"):  # Linux/macOS: decode the .evtx ourselves
+            yield from read_evtx(path, max_events, warn)
             return
         out = _run_wevtutil(["qe", str(p), "/lf:true", "/f:RenderedXml", f"/c:{max_events}", "/rd:true"])
         yield from parse_events_xml(out)

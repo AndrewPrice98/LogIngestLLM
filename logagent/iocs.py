@@ -38,6 +38,11 @@ _PRIVATE_NETS = [ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12"
                                                     "fc00::/7")]
 
 
+def _unmap(v: str) -> str:
+    """::ffff:1.2.3.4 (IPv4-mapped, as Windows logs it) -> 1.2.3.4"""
+    return v[7:] if v.lower().startswith("::ffff:") and _IPV4.fullmatch(v[7:]) else v
+
+
 def _ip_scope(v: str) -> str:
     try:
         ip = ipaddress.ip_address(v)
@@ -67,7 +72,7 @@ def extract(text: str, fields: dict | None = None) -> list[tuple[str, str, str]]
     text = text[:4000]
     if fields:
         for k in ("IpAddress", "SourceAddress", "DestAddress", "SourceIp", "DestinationIp", "ClientAddress"):
-            v = str(fields.get(k, "")).strip()
+            v = _unmap(str(fields.get(k, "")).strip())
             if v and v not in ("-", "::1", "127.0.0.1") and _ip_scope(v):
                 add("ip", v, _ip_scope(v))
         for k in _USER_FIELDS:
@@ -88,7 +93,10 @@ def extract(text: str, fields: dict | None = None) -> list[tuple[str, str, str]]
     for v in _IPV4.findall(stripped):
         add("ip", v, _ip_scope(v))
     for m in _IPV6.finditer(stripped):
-        v = m.group(0)
+        v = _unmap(m.group(0))
+        if v != m.group(0):
+            add("ip", v, _ip_scope(v))
+            continue
         if v.count(":") >= 2 and ("::" in v or any(c.isalpha() for c in v)) and _ip_scope(v):
             add("ip", v.lower(), _ip_scope(v))
     no_email = _EMAIL.sub(" ", stripped)

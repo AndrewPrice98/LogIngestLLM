@@ -40,8 +40,8 @@ def main():
     ap.add_argument("--lr", type=float, default=2e-4)
     ap.add_argument("--rank", type=int, default=16)
     ap.add_argument("--max-len", type=int, default=768)
-    ap.add_argument("--batch-tokens", type=int, default=2048, help="tokens per micro-batch (fit to 8 GB)")
-    ap.add_argument("--accum", type=int, default=8)
+    ap.add_argument("--batch-tokens", type=int, default=1024, help="tokens per micro-batch (fit to 8 GB)")
+    ap.add_argument("--accum", type=int, default=16)
     ap.add_argument("--limit", type=int, help="use only N examples (smoke test)")
     args = ap.parse_args()
 
@@ -50,7 +50,8 @@ def main():
     if args.limit:
         rows = rows[: args.limit]
     tok, model = load(args.resume, args.base, for_training=True)
-    model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
+    model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True,
+                                            gradient_checkpointing_kwargs={"use_reentrant": False})
     if not args.resume:
         model = get_peft_model(model, LoraConfig(
             r=args.rank, lora_alpha=args.rank * 2, lora_dropout=0.05, bias="none", task_type="CAUSAL_LM",
@@ -103,7 +104,7 @@ def main():
     out_dir = MODELS / f"logagent-{datetime.now():%Y%m%d-%H%M}"
     print(f"training {total_steps} steps ({total_micro} micro-batches) -> {out_dir}")
     model.train()
-    t0, step, micro, run_loss = time.time(), 0, 0, 0.0
+    t0, step, micro, run_loss, since = time.time(), 0, 0, 0.0, 0
     queue = []
     while micro < total_micro:
         if not queue:
@@ -119,12 +120,13 @@ def main():
             sched.step()
             opt.zero_grad(set_to_none=True)
             step += 1
+            since += 1
             if step % 5 == 0 or step == total_steps:
                 el = time.time() - t0
-                print(f"step {step}/{total_steps} loss {run_loss / 5 if step % 5 == 0 else run_loss:.4f} "
+                print(f"step {step}/{total_steps} loss {run_loss / since:.4f} "
                       f"lr {sched.get_last_lr()[0]:.2e} {el / 60:.1f}m elapsed, ~{el / step * (total_steps - step) / 60:.0f}m left "
                       f"mem {torch.cuda.max_memory_allocated() / 2**30:.1f}GB", flush=True)
-                run_loss = 0.0
+                run_loss, since = 0.0, 0
 
     model.save_pretrained(out_dir / "adapter")
     tok.save_pretrained(out_dir / "adapter")

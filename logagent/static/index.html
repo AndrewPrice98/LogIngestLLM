@@ -68,6 +68,11 @@ td.msg{font-family:var(--mono);font-size:12px;word-break:break-word}
 .answer{white-space:pre-wrap;margin-top:10px}
 .tabs{display:flex;gap:4px;margin-bottom:10px}
 .tabs button{background:transparent;color:var(--muted);border:1px solid transparent;font-weight:500}
+.fb{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--muted)}
+.fb button{background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:3px 9px;font-weight:500;font-size:12px}
+.fb button.on.useful{background:var(--ok);border-color:var(--ok);color:#fff}
+.fb button.on.noise{background:var(--crit);border-color:var(--crit);color:#fff}
+.fb select{width:auto;padding:3px 6px;font-size:12px}
 .tabs button.on{color:var(--text);border-color:var(--border);background:var(--panel)}
 @media (max-width:860px){.layout{grid-template-columns:1fr;padding:12px}}
 </style>
@@ -118,7 +123,7 @@ const api = async (path, body) => {
   return j;
 };
 const fmt = iso => { const d = new Date(iso); return isNaN(d) ? iso : d.toLocaleString(); };
-let current = null, filter = {host: '', imp: ''}, tab = 'findings';
+let current = null, fb = {}, showAll = false, filter = {host: '', imp: ''}, tab = 'findings';
 
 async function init() {
   const cfg = await api('/api/config');
@@ -148,6 +153,7 @@ async function loadHistory(openLatest) {
 async function openScan(id) {
   const s = await api('/api/scans/' + encodeURIComponent(id));
   if (s.error) return;
+  fb = await api('/api/feedback/' + encodeURIComponent(id));
   current = s; history.replaceState(null, '', '#' + id);
   document.querySelectorAll('.hist a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + id));
   render();
@@ -164,7 +170,7 @@ function render() {
     el('div', {class: 'tiles'},
       tile(st.events ?? 0, 'events read'), tile(st.clusters ?? 0, 'distinct patterns'),
       tile(st.flagged ?? 0, 'worth a look'), tile((st.hosts || []).length, 'hosts'),
-      tile(s.duration_s + 's', 'scan time')),
+      tile(s.duration_s + 's', 'scan time'), tile(Object.keys(fb).length, 'labeled by you')),
     ...(s.warnings || []).map(w => el('div', {class: 'warn'}, '⚠ ' + w)),
     el('div', {class: 'summary', style: 'margin-top:8px;font-size:12px'},
       `${fmt(s.created)} · window ${st.window} · reviewed by ${a._meta?.provider === 'none' ? 'rules only' : (a._meta?.provider + (a._meta?.model ? ' ' + a._meta.model : ''))}`));
@@ -197,16 +203,21 @@ function render() {
           ...raws.map(r => el('div', {},
             el('div', {class: 'summary', style: 'font-size:12px;margin-top:6px'},
               `${r.source} · ${r.program}${r.event_id ? ' #' + r.event_id : ''} · ${r.count}× · ${fmt(r.first)} → ${fmt(r.last)}${r.novel ? ' · NEW' : ''}`),
-            ...r.samples.map(x => el('pre', {}, x))))) : null));
+            ...r.samples.map(x => el('pre', {}, x))))) : null,
+        raws.length ? fbControls(raws.map(r => r.key), imp) : null));
     }
     if ((a.dismissed || []).length) m.append(el('details', {class: 'card'}, el('summary', {}, `Dismissed as noise (${a.dismissed.length})`),
       ...a.dismissed.map(d => el('p', {}, el('b', {}, (d.keys || []).map(k => byKey[k]?.rule?.title || byKey[k]?.template?.slice(0, 60) || k).join(', ')), ': ', d.reason))));
   } else if (tab === 'raw') {
-    const t = el('table', {}, el('tr', {}, ...['Score', 'Host', 'Source', 'Count', 'Rule', 'Latest message'].map(h => el('th', {}, h))));
-    for (const f of s.findings || []) t.append(el('tr', {},
+    const t = el('table', {}, el('tr', {}, ...['Score', 'Host', 'Source', 'Count', 'Rule', 'Latest message', 'Your label'].map(h => el('th', {}, h))));
+    const rows = (s.findings || []).concat(showAll ? (s.others || []) : []);
+    for (const f of rows) t.append(el('tr', {},
       el('td', {}, f.score + (f.novel ? ' ★' : '')), el('td', {}, f.host), el('td', {}, f.source + (f.event_id ? ' #' + f.event_id : '')),
-      el('td', {}, f.count), el('td', {}, f.rule?.title || '—'), el('td', {class: 'msg'}, f.samples[0]?.slice(0, 300) || '')));
-    m.append(el('div', {class: 'card', style: 'overflow-x:auto'}, (s.findings || []).length ? t : el('div', {class: 'empty'}, 'No events scored above the threshold.'),
+      el('td', {}, f.count), el('td', {}, f.rule?.title || '—'), el('td', {class: 'msg'}, f.samples[0]?.slice(0, 300) || ''),
+      el('td', {}, fbControls([f.key], impOf(f.score)))));
+    m.append(el('label', {class: 'src'}, (() => { const c = el('input', {type: 'checkbox', on: {change: e => { showAll = e.target.checked; render(); }}}); c.checked = showAll; return c; })(),
+      `Also show ${(s.others || []).length} lower-scored patterns (label anything the rules missed)`));
+    m.append(el('div', {class: 'card', style: 'overflow-x:auto'}, rows.length ? t : el('div', {class: 'empty'}, 'No events scored above the threshold.'),
       el('p', {class: 'summary', style: 'font-size:12px'}, '★ = first time this pattern was seen on that host.')));
   } else {
     const q = el('textarea', {rows: 3, placeholder: 'e.g. Is the under-voltage on the Pi related to the SD card errors? What should I fix first?'});
@@ -220,6 +231,25 @@ function render() {
     m.append(el('div', {class: 'card'}, el('h2', {}, 'Ask about this scan'), q, el('div', {class: 'row'}, btn), out));
   }
 }
+function fbControls(keys, defImp) {
+  const cur = fb[keys[0]] || {};
+  const imp = el('select', {'aria-label': 'Importance', on: {change: () => send('useful', imp.value)}},
+    ...['critical', 'high', 'medium', 'low'].map(o => { const op = el('option', {value: o}, o); if ((cur.importance || defImp) === o) op.selected = true; return op; }));
+  const send = async (verdict, importance) => {
+    const again = cur.verdict === verdict && importance === undefined;
+    for (const key of keys) {
+      const r = await api('/api/feedback', {scan_id: current.id, key, verdict: again ? null : verdict, importance: again ? null : (verdict === 'useful' ? (importance || imp.value) : null)});
+      if (r.error) { alert(r.error); return; }
+      if (again) delete fb[key]; else fb[key] = r;
+    }
+    render();
+  };
+  return el('div', {class: 'fb'}, 'Teach your model:',
+    el('button', {class: 'useful' + (cur.verdict === 'useful' ? ' on' : ''), on: {click: () => send('useful')}}, '👍 worth knowing'),
+    el('button', {class: 'noise' + (cur.verdict === 'noise' ? ' on' : ''), on: {click: () => send('noise')}}, '👎 noise'),
+    cur.verdict === 'noise' ? null : imp);
+}
+const impOf = score => score >= 100 ? 'critical' : score >= 75 ? 'high' : score >= 50 ? 'medium' : 'low';
 const tile = (v, l) => el('div', {class: 'tile'}, el('b', {}, v), el('span', {}, l));
 
 $('#scanBtn').addEventListener('click', async () => {

@@ -98,3 +98,25 @@ def test_novelty_bonus(tmp_path):
     base.update(score_clusters(cluster_events(mk("usb 1-1: new device"), RULES), base))
     c = score_clusters(cluster_events(mk("EXT4-fs error (device sda1): bad"), RULES), base)[0]
     assert c.novel and "first time seen on this host" in c.reasons
+
+
+def test_dataset_build_uses_feedback(tmp_path):
+    import json as _json
+    from logagent import feedback
+    from logagent.train.dataset import build
+    scans = tmp_path / "scans"
+    scans.mkdir()
+    evs = list(parse_syslog(["Nov  6 10:00:00 pi kernel: EXT4-fs error (device sda1): bad",
+                             "Nov  6 10:00:01 pi systemd[1]: Started foo.service."], year=2026))
+    cl = score_clusters(cluster_events(evs, RULES))
+    scan = {"id": "20261106-100000", "analysis": {"findings": []},
+            "findings": [c.to_dict() for c in cl if c.score >= 30], "others": [c.to_dict() for c in cl if c.score < 30]}
+    (scans / "20261106-100000.json").write_text(_json.dumps(scan, default=str))
+    cfg = {"data_dir": str(tmp_path), "rules": []}
+    feedback.save(cfg, scan["id"], scan["others"][0]["key"], "useful", "medium", "I care about foo")
+    stats = build(cfg, tmp_path / "out", n_synthetic=3)
+    assert stats["sources"]["gold"] == 1
+    rows = [_json.loads(l) for l in open(tmp_path / "out" / "train.jsonl", encoding="utf-8")]
+    gold = [r for r in rows if r["meta"]["src"] == "you"]
+    if gold:  # may be held out to eval by hash
+        assert _json.loads(gold[0]["messages"][2]["content"])["importance"] == "medium"

@@ -10,7 +10,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse
 
-from . import engine, llm
+from . import engine, feedback, llm
 
 STATIC = Path(__file__).parent / "static"
 
@@ -99,6 +99,8 @@ def make_handler(cfg: dict, job: Job):
             if path.startswith("/api/scans/"):
                 scan = engine.load_scan(cfg, path.rsplit("/", 1)[-1])
                 return self._send(200, scan) if scan else self._send(404, {"error": "not found"})
+            if path.startswith("/api/feedback/"):
+                return self._send(200, feedback.for_scan(cfg, path.rsplit("/", 1)[-1]))
             if path == "/api/job":
                 return self._send(200, job.snapshot())
             return self._send(404, {"error": "not found"})
@@ -115,6 +117,15 @@ def make_handler(cfg: dict, job: Job):
             if path == "/api/scan":
                 ok = start_scan(body)
                 return self._send(202 if ok else 409, {"started": ok})
+            if path == "/api/feedback":
+                sid, key = str(body.get("scan_id", "")), str(body.get("key", ""))
+                if not engine.load_scan(cfg, sid) or not key.isalnum():
+                    return self._send(400, {"error": "unknown scan or key"})
+                try:
+                    return self._send(200, feedback.save(cfg, sid, key, body.get("verdict"),
+                                                         body.get("importance"), body.get("note")))
+                except ValueError as exc:
+                    return self._send(400, {"error": str(exc)})
             if path == "/api/ask":
                 scan = engine.load_scan(cfg, str(body.get("scan_id", "")))
                 q = str(body.get("question", "")).strip()[:2000]

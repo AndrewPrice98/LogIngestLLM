@@ -49,6 +49,10 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("check-llm", help="verify the configured LLM answers")
 
+    d = sub.add_parser("dataset", help="build training data for your own model")
+    d.add_argument("--out", default="train_data")
+    d.add_argument("--synthetic", type=int, default=400, help="number of synthetic host-days to add")
+
     args = ap.parse_args(argv)
     cfg = engine.load_config(args.config)
     if args.config and not Path(args.config).exists():
@@ -82,6 +86,10 @@ def main(argv: list[str] | None = None) -> int:
             print("LLM check failed:", exc)
             return 1
         print(f"{cfg['llm'].get('provider')} / {cfg['llm'].get('model')} replied: {text.strip()[:80]!r}  usage={usage}")
+        return 0
+    if args.cmd == "dataset":
+        from .train.dataset import build
+        print(json.dumps(build(cfg, args.out, args.synthetic), indent=1))
         return 0
     ap.print_help()
     return 0

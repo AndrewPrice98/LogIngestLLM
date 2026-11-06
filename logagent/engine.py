@@ -85,6 +85,10 @@ def run_scan(cfg: dict, sources: list[dict] | None = None, window: str | None = 
     score_clusters(clusters, baseline)
     selected = select_findings(clusters, int(cfg.get("max_findings", 40)), float(cfg.get("min_score", 30)))
     findings = [c.to_dict() for c in selected]
+    chosen = {c.key for c in selected}
+    # Lower-scored patterns are kept too: they are the "not important" examples for training.
+    others = [c.to_dict() for c in sorted((c for c in clusters if c.key not in chosen),
+                                          key=lambda c: (c.score, c.count), reverse=True)[:300]]
 
     sev = Counter(e.severity_name for e in events)
     stats = {
@@ -97,7 +101,10 @@ def run_scan(cfg: dict, sources: list[dict] | None = None, window: str | None = 
     if use_llm and cfg["llm"].get("provider", "none") != "none" and findings:
         progress(f"asking {cfg['llm']['provider']} to review {len(findings)} findings ...")
         try:
-            analysis = llm.analyze(findings, stats, cfg["llm"])
+            if cfg["llm"].get("mode") == "triage":
+                analysis = llm.analyze_triage(findings, stats, cfg["llm"], progress)
+            else:
+                analysis = llm.analyze(findings, stats, cfg["llm"])
         except (llm.LLMError, KeyError, ValueError, TimeoutError) as exc:
             llm_error = str(exc)
             warn(f"[llm] {exc}")
@@ -111,7 +118,7 @@ def run_scan(cfg: dict, sources: list[dict] | None = None, window: str | None = 
         "created": datetime.now(timezone.utc).isoformat(),
         "duration_s": round(time.time() - t0, 1),
         "sources": [{k: v for k, v in s.items() if k not in ("identity",)} for s in sources],
-        "stats": stats, "analysis": analysis, "findings": findings,
+        "stats": stats, "analysis": analysis, "findings": findings, "others": others,
         "warnings": warnings, "llm_error": llm_error,
     }
     scans = data_dir / "scans"

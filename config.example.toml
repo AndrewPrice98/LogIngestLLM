@@ -13,6 +13,12 @@ model = "qwen3:8b"                      # fits an 8 GB GPU; try llama3.1:8b, gem
 num_ctx = 16384
 timeout = 300
 
+# Your own trained model (see README "Training your own model"):
+# provider = "openai"
+# base_url = "http://127.0.0.1:8081/v1"
+# model = "logagent"
+# mode = "triage"                          # review each pattern separately (what it was trained on)
+
 # llama.cpp server / LM Studio / vLLM / text-generation-webui:
 # provider = "openai"
 # base_url = "http://localhost:8080/v1"   # LM Studio: http://localhost:1234/v1

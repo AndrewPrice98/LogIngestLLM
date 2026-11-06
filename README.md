@@ -41,6 +41,38 @@ model = "qwen3:8b"
 
 Check it with `python -m logagent check-llm`. `provider = "none"` = rules only.
 
+## Training your own model
+
+The agent can run on a model you train yourself: an open base model (Qwen3 4B Instruct, Apache 2.0) fine-tuned with QLoRA on your GPU to triage *your* logs the way *you* want. The base model's weights are downloaded once, and your trained part (a ~60 MB LoRA adapter in `models/`) never leaves your PC.
+
+1. **Label.** In the dashboard, mark findings 👍 *worth knowing* (with an importance) or 👎 *noise*. Turn on "also show lower-scored patterns" to label anything the rules missed. Labels go to `data/feedback.json`.
+2. **Build the dataset.** Your labels count most (weighted x3). The built-in rules label everything else, and synthetic Pi/Jetson/Linux scenarios fill the gaps.
+   ```bash
+   python -m logagent dataset
+   ```
+3. **Train** (one-time setup of a Python 3.12 environment, since 3.14 has no CUDA PyTorch builds yet):
+   ```bash
+   py -3.12 -m venv .venv-train
+   .venv-train\Scripts\pip install torch --index-url https://download.pytorch.org/whl/cu128
+   .venv-train\Scripts\pip install transformers peft accelerate bitsandbytes
+   .venv-train\Scripts\python trainer\train.py
+   ```
+4. **Evaluate**: compare against the untrained base model on held-out data (including scans you labeled):
+   ```bash
+   .venv-train\Scripts\python trainer\evaluate.py --adapter none
+   .venv-train\Scripts\python trainer\evaluate.py
+   ```
+5. **Use it**: `.venv-train\Scripts\python trainer\serve.py`, then in `logagent.toml`:
+   ```toml
+   [llm]
+   provider = "openai"
+   base_url = "http://127.0.0.1:8081/v1"
+   model = "logagent"
+   mode = "triage"      # the model reviews each pattern separately; this is what it was trained on
+   ```
+
+Repeat 1-4 as you label more. Each run is saved as a new version in `models/` with its eval score.
+
 ## Raspberry Pi / Jetson
 
 Set up key login once (`ssh-copy-id pi@raspberrypi.local`), then:

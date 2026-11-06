@@ -3,3 +3,6 @@ __pycache__/
 *.pyc
 .pytest_cache/
 logagent.toml
+.venv-train/
+models/
+train_data/

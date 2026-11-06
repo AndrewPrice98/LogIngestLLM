@@ -18,6 +18,14 @@ Use **Start logagent (admin)** to include the Security log (failed logons, accou
 
 Settings live in `logagent.toml` (copied from `config.example.toml` on first run). Sources with `enabled = false` are listed but not scanned by default.
 
+## Quick start (Linux / macOS)
+
+```bash
+./start-logagent.sh               # --no-browser, --port 8765, --model-port 8081
+```
+
+Same steps as the Windows launcher. Ctrl+C stops the dashboard and the model it started. On Linux the local systemd journal is a `journald` source, and no admin step is needed if your user can read the system journal (`wheel`/`adm`/`systemd-journal` group).
+
 ## How it decides what's valuable
 
 1. **Collect** events from each source into one format (time, host, severity, program, message).

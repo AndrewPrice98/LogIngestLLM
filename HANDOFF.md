@@ -36,6 +36,7 @@ what to do. It has a local web dashboard and runs on **a model the owner trained
 | `train/synth.py`, `train/dataset.py` | synthetic Pi/Jetson/Linux/app scenarios + scans + feedback → `train_data/{train,eval}.jsonl` (`python -m logagent dataset`) |
 | `trainer/` | **separate venv** `.venv-train` (Python 3.12, torch cu128, transformers 5.x, peft, bitsandbytes). `train.py` (QLoRA, custom loop, fits 8 GB at `--batch-tokens 1024`), `evaluate.py`, `serve.py` (OpenAI-compatible on :8081, CUDA + 4-bit) |
 | `start-logagent.ps1` + `Start logagent*.bat` | launcher: starts serve.py if an adapter exists, waits for it, starts dashboard; `-Admin` self-elevates |
+| `start-logagent.sh` | same for Linux/macOS; Ctrl+C/TERM/HUP stops the dashboard and the model it started |
 
 Config: `logagent.toml` (gitignored; template `config.example.toml`). Tests: `python -m pytest -q` (14 passing).
 
@@ -64,8 +65,13 @@ wanted: `data/` (scan history with raw log text from the desktop, baseline, owne
      not 3.14). The first run downloads ~8 GB of base weights to `~/.cache/huggingface`.
    - No NVIDIA GPU / small GPU: **next step 1 below** (merge + GGUF → Ollama/llama.cpp, which runs on CPU or Apple/AMD).
      Until then set `[llm] provider = "none"` and the dashboard runs on rules alone.
-3. Update `logagent.toml` sources for the laptop (Windows channels, Pi/Jetson SSH hosts). The launcher and
-   desktop shortcuts are Windows-only. On macOS/Linux run `python -m logagent ui` directly.
+3. Update `logagent.toml` sources for the laptop (Windows channels, Pi/Jetson SSH hosts). On Linux/macOS
+   use `./start-logagent.sh`.
+
+**Laptop status (2026-11-06, done):** Fedora 44, RTX 4060 Laptop 8 GB, driver CUDA 13.4. `.venv-train` built with
+uv on Python 3.12 (torch 2.11.0+cu128, transformers 5.22, peft 0.21). Base weights cached. serve.py: ~16 s load,
+3 GB VRAM, ~3 s per pattern. `logagent.toml` uses a local `journald` source + the trained model in triage mode.
+`~/Desktop/logagent.desktop` runs `start-logagent.sh`. git-lfs is not installed yet (`sudo dnf install git-lfs`).
 
 ## Next steps (priority order)
 
@@ -87,6 +93,8 @@ wanted: `data/` (scan history with raw log text from the desktop, baseline, owne
    correlation across findings in triage mode (currently only the whole-report mode correlates).
 
 ## Gotchas
+
+- Fedora laptop: `irqbalance: Cannot change IRQ N affinity: Permission denied` trips the auth-failure rule; it is benign (candidate noise rule).
 
 - Default `python` on the desktop was 3.14 (no CUDA torch wheels), hence the separate 3.12 `.venv-train`.
 - Other apps using VRAM (Zoom, Wallpaper Engine) push training into shared memory and make it ~4x slower.

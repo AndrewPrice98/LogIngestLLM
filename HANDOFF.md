@@ -52,7 +52,7 @@ Config: `logagent.toml` (gitignored; template `config.example.toml`). Tests: `py
 
 ## Laptop setup
 
-The repo is on GitHub (private: `<owner>/LogIngestLLM`). The trained adapter in `models/` is committed via
+The repo is on GitHub: `<owner>/LogIngestLLM`. The trained adapter in `models/` is committed via
 **Git LFS** (`git lfs install` before cloning, or `git lfs pull` after). Not in git and copied separately if
 wanted: `data/` (scan history with raw log text from the desktop, baseline, owner feedback labels) and
 `logagent.toml` (machine-specific sources). `.venv-train/` should be recreated, not copied.

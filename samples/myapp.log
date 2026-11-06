@@ -1,0 +1,60 @@
+2026-11-06 07:21:03,123 INFO worker: processed batch 0 in 100ms
+2026-11-06 07:26:03,123 INFO worker: processed batch 1 in 101ms
+2026-11-06 07:31:03,123 INFO worker: processed batch 2 in 102ms
+2026-11-06 07:36:03,123 INFO worker: processed batch 3 in 103ms
+2026-11-06 07:41:03,123 INFO worker: processed batch 4 in 104ms
+2026-11-06 07:46:03,123 INFO worker: processed batch 5 in 105ms
+2026-11-06 07:51:03,123 INFO worker: processed batch 6 in 106ms
+2026-11-06 07:56:03,123 INFO worker: processed batch 7 in 107ms
+2026-11-06 08:01:03,123 INFO worker: processed batch 8 in 108ms
+2026-11-06 08:06:03,123 INFO worker: processed batch 9 in 109ms
+2026-11-06 08:11:03,123 INFO worker: processed batch 10 in 110ms
+2026-11-06 08:16:03,123 INFO worker: processed batch 11 in 111ms
+2026-11-06 08:21:03,123 INFO worker: processed batch 12 in 112ms
+2026-11-06 08:26:03,123 INFO worker: processed batch 13 in 113ms
+2026-11-06 08:31:03,123 INFO worker: processed batch 14 in 114ms
+2026-11-06 08:36:03,123 INFO worker: processed batch 15 in 115ms
+2026-11-06 08:41:03,123 INFO worker: processed batch 16 in 116ms
+2026-11-06 08:46:03,123 INFO worker: processed batch 17 in 117ms
+2026-11-06 08:51:03,123 INFO worker: processed batch 18 in 118ms
+2026-11-06 08:56:03,123 INFO worker: processed batch 19 in 119ms
+2026-11-06 09:01:03,123 INFO worker: processed batch 20 in 120ms
+2026-11-06 09:06:03,123 INFO worker: processed batch 21 in 121ms
+2026-11-06 09:11:03,123 INFO worker: processed batch 22 in 122ms
+2026-11-06 09:16:03,123 INFO worker: processed batch 23 in 123ms
+2026-11-06 09:21:03,123 INFO worker: processed batch 24 in 124ms
+2026-11-06 09:26:03,123 INFO worker: processed batch 25 in 125ms
+2026-11-06 09:31:03,123 INFO worker: processed batch 26 in 126ms
+2026-11-06 09:36:03,123 INFO worker: processed batch 27 in 127ms
+2026-11-06 09:41:03,123 INFO worker: processed batch 28 in 128ms
+2026-11-06 09:46:03,123 INFO worker: processed batch 29 in 129ms
+2026-11-06 08:01:03,123 ERROR worker: failed to process job 77
+Traceback (most recent call last):
+  File "/srv/app/worker.py", line 88, in run
+    result = model.infer(frame)
+  File "/srv/app/model.py", line 41, in infer
+    out = self.engine.execute(batch)
+RuntimeError: CUDA out of memory. Tried to allocate 256.00 MiB
+2026-11-06 08:31:03,123 ERROR worker: failed to process job 78
+Traceback (most recent call last):
+  File "/srv/app/worker.py", line 88, in run
+    result = model.infer(frame)
+  File "/srv/app/model.py", line 41, in infer
+    out = self.engine.execute(batch)
+RuntimeError: CUDA out of memory. Tried to allocate 256.00 MiB
+2026-11-06 09:01:03,123 ERROR worker: failed to process job 79
+Traceback (most recent call last):
+  File "/srv/app/worker.py", line 88, in run
+    result = model.infer(frame)
+  File "/srv/app/model.py", line 41, in infer
+    out = self.engine.execute(batch)
+RuntimeError: CUDA out of memory. Tried to allocate 256.00 MiB
+2026-11-06 09:31:03,123 ERROR worker: failed to process job 80
+Traceback (most recent call last):
+  File "/srv/app/worker.py", line 88, in run
+    result = model.infer(frame)
+  File "/srv/app/model.py", line 41, in infer
+    out = self.engine.execute(batch)
+RuntimeError: CUDA out of memory. Tried to allocate 256.00 MiB
+2026-11-06 10:31:03,123 WARNING db: connection refused to 192.168.1.5:5432, retrying
+2026-11-06 11:11:03,123 INFO worker: shutdown complete

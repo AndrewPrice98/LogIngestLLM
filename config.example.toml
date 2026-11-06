@@ -1,0 +1,68 @@
+# Copy to logagent.toml and edit.
+data_dir = "data"        # scan history + baseline of "seen before" patterns
+window = "24h"           # default look-back for a scan
+max_findings = 40        # clusters handed to the LLM
+min_score = 30           # pre-filter threshold (0-150); lower = more findings
+
+# ---------------------------------------------------------------- your LLM
+# Logs never leave your machines unless you point this at a cloud API.
+[llm]
+provider = "ollama"                     # ollama | openai (any OpenAI-compatible server) | anthropic | none
+base_url = "http://localhost:11434"
+model = "qwen3:8b"                      # fits an 8 GB GPU; try llama3.1:8b, gemma3:12b-it-qat, etc.
+num_ctx = 16384
+timeout = 300
+
+# llama.cpp server / LM Studio / vLLM / text-generation-webui:
+# provider = "openai"
+# base_url = "http://localhost:8080/v1"   # LM Studio: http://localhost:1234/v1
+# model = "local-model"
+# api_key = ""                            # only if your server wants one
+
+# ---------------------------------------------------------------- sources
+[[sources]]
+name = "This PC"
+type = "windows"
+channels = ["System", "Application", "Security"]   # Security needs an admin terminal
+
+[[sources]]
+name = "Defender"
+type = "windows"
+channels = ["Microsoft-Windows-Windows Defender/Operational"]
+
+# A Raspberry Pi over SSH (key-based login: ssh-copy-id pi@raspberrypi.local)
+# [[sources]]
+# name = "pi"
+# type = "ssh"
+# host = "pi@raspberrypi.local"
+# device = "pi"                 # pi | jetson | linux  (pi adds under-voltage/throttle checks)
+# logs = ["/home/pi/myapp/*.log"]
+
+# A Jetson
+# [[sources]]
+# name = "jetson"
+# type = "ssh"
+# host = "mreyes@jetson.local"
+# device = "jetson"
+
+# Your own app logs (text or JSON lines; tracebacks are grouped)
+# [[sources]]
+# name = "myapp"
+# type = "app"
+# path = "D:/Projects/myapp/logs/*.log"
+
+# A syslog file copied from somewhere
+# [[sources]]
+# name = "nas syslog"
+# type = "syslog"
+# path = "D:/logs/nas/messages*"
+
+# ---------------------------------------------------------------- your own rules
+# [[rules]]
+# id = "myapp_payment_fail"
+# title = "Payment provider errors"
+# category = "app"
+# score = 80
+# pattern = "stripe.*(error|declined)"
+# why = "Customers can't pay."
+# action = "Check the provider status page and API key."

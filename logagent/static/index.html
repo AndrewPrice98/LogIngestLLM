@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log Agent</title>
+<style>
+:root{
+  --bg:#f6f7f9;--panel:#fff;--panel2:#f0f2f5;--text:#1b1f24;--muted:#5f6b7a;--border:#dde2e8;
+  --accent:#2f6fde;--accent-ink:#fff;
+  --crit:#c62828;--crit-bg:#fdecec;--high:#d9661f;--high-bg:#fdf1e7;--med:#a68a00;--med-bg:#fbf6dd;--low:#4a6a8a;--low-bg:#eaf0f6;
+  --ok:#2e7d32;--mono:ui-monospace,SFMono-Regular,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0f1216;--panel:#171b21;--panel2:#1e242c;--text:#e6e9ee;--muted:#93a0b0;--border:#2a313b;
+  --accent:#5b8ff0;--accent-ink:#fff;
+  --crit:#ff6b6b;--crit-bg:#3a1a1c;--high:#ff9a52;--high-bg:#3a2617;--med:#e7c84a;--med-bg:#33301a;--low:#8fb0d4;--low-bg:#1c2633;
+  --ok:#6cc070;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--border);background:var(--panel)}
+header h1{font-size:17px;margin:0;font-weight:650}
+.badge{font-size:12px;padding:2px 8px;border-radius:99px;background:var(--panel2);color:var(--muted);border:1px solid var(--border)}
+.layout{display:grid;grid-template-columns:300px 1fr;gap:16px;padding:16px;max-width:1400px;margin:0 auto}
+aside,main{min-width:0}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px}
+.card h2{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 10px}
+label.src{display:flex;gap:8px;align-items:flex-start;padding:4px 0;cursor:pointer}
+label.src small{display:block;color:var(--muted);font-size:12px;word-break:break-all}
+select,input[type=text],textarea{width:100%;background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:7px 8px;font:inherit}
+button{background:var(--accent);color:var(--accent-ink);border:0;border-radius:6px;padding:8px 14px;font:inherit;font-weight:600;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}
+button.ghost{background:transparent;color:var(--accent);border:1px solid var(--border);font-weight:500}
+.row{display:flex;gap:8px;align-items:center;margin-top:8px}
+#joblog{font:12px/1.4 var(--mono);color:var(--muted);max-height:160px;overflow:auto;white-space:pre-wrap;margin-top:8px}
+.hist a{display:block;padding:7px 8px;border-radius:6px;color:inherit;text-decoration:none;border:1px solid transparent}
+.hist a:hover{background:var(--panel2)}
+.hist a.active{border-color:var(--accent);background:var(--panel2)}
+.hist small{color:var(--muted);display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.headline{font-size:19px;font-weight:650;margin:0 0 6px}
+.summary{color:var(--muted);margin:0}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-top:14px}
+.tile{background:var(--panel2);border-radius:8px;padding:10px}
+.tile b{display:block;font-size:20px}
+.tile span{font-size:12px;color:var(--muted)}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.filters select{width:auto}
+.finding{border:1px solid var(--border);border-left:4px solid var(--low);border-radius:8px;padding:12px 14px;margin-bottom:10px;background:var(--panel)}
+.finding.critical{border-left-color:var(--crit)}.finding.high{border-left-color:var(--high)}.finding.medium{border-left-color:var(--med)}
+.pill{font-size:11px;font-weight:700;text-transform:uppercase;padding:2px 7px;border-radius:4px;letter-spacing:.04em}
+.pill.critical{background:var(--crit-bg);color:var(--crit)}.pill.high{background:var(--high-bg);color:var(--high)}
+.pill.medium{background:var(--med-bg);color:var(--med)}.pill.low{background:var(--low-bg);color:var(--low)}
+.finding h3{margin:0;font-size:15px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.finding .host{color:var(--muted);font-weight:400;font-size:13px}
+.finding dl{margin:8px 0 0;display:grid;grid-template-columns:70px 1fr;gap:4px 10px}
+.finding dt{color:var(--muted);font-size:12px;padding-top:2px}
+.finding dd{margin:0}
+details{margin-top:8px}
+summary{cursor:pointer;color:var(--accent);font-size:13px}
+pre{font:12px/1.45 var(--mono);background:var(--panel2);padding:8px;border-radius:6px;white-space:pre-wrap;word-break:break-word;margin:6px 0;max-height:240px;overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top}
+th{color:var(--muted);font-weight:500;font-size:12px}
+td.msg{font-family:var(--mono);font-size:12px;word-break:break-word}
+.warn{color:var(--high);font-size:13px}
+.empty{color:var(--muted);text-align:center;padding:40px 10px}
+.answer{white-space:pre-wrap;margin-top:10px}
+.tabs{display:flex;gap:4px;margin-bottom:10px}
+.tabs button{background:transparent;color:var(--muted);border:1px solid transparent;font-weight:500}
+.tabs button.on{color:var(--text);border-color:var(--border);background:var(--panel)}
+@media (max-width:860px){.layout{grid-template-columns:1fr;padding:12px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Log Agent</h1>
+  <span class="badge" id="llmBadge">LLM: …</span>
+</header>
+<div class="layout">
+  <aside>
+    <div class="card">
+      <h2>New scan</h2>
+      <div id="sources"></div>
+      <div class="row">
+        <select id="window" aria-label="Time window">
+          <option value="1h">Last hour</option><option value="6h">Last 6 hours</option>
+          <option value="24h" selected>Last 24 hours</option><option value="3d">Last 3 days</option>
+          <option value="7d">Last 7 days</option>
+        </select>
+      </div>
+      <label class="src"><input type="checkbox" id="useLlm" checked> Ask the LLM to review</label>
+      <div class="row"><button id="scanBtn">Scan now</button></div>
+      <div id="joblog"></div>
+    </div>
+    <div class="card hist">
+      <h2>History</h2>
+      <div id="history"><div class="empty">No scans yet</div></div>
+    </div>
+  </aside>
+  <main id="main"><div class="card empty">Pick sources and press <b>Scan now</b>.</div></main>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+const el = (tag, attrs = {}, ...kids) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') n.className = v; else if (k === 'on') for (const [e, f] of Object.entries(v)) n.addEventListener(e, f);
+    else n.setAttribute(k, v);
+  }
+  for (const k of kids.flat()) if (k != null && k !== false) n.append(k instanceof Node ? k : String(k));
+  return n;
+};
+const api = async (path, body) => {
+  const r = await fetch(path, body ? {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(body)} : {});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok && !j.error) j.error = 'HTTP ' + r.status;
+  return j;
+};
+const fmt = iso => { const d = new Date(iso); return isNaN(d) ? iso : d.toLocaleString(); };
+let current = null, filter = {host: '', imp: ''}, tab = 'findings';
+
+async function init() {
+  const cfg = await api('/api/config');
+  const prov = cfg.llm?.provider || 'none';
+  $('#llmBadge').textContent = prov === 'none' ? 'LLM: off (rules only)' : `LLM: ${prov}${cfg.llm.model ? ' · ' + cfg.llm.model : ''}`;
+  if (prov === 'none') $('#useLlm').checked = false;
+  if (cfg.window) $('#window').value = cfg.window;
+  const box = $('#sources');
+  if (!cfg.sources.length) box.append(el('div', {class: 'warn'}, 'No sources configured. Add [[sources]] to ', cfg.config_path || 'logagent.toml', '.'));
+  for (const s of cfg.sources) box.append(el('label', {class: 'src'},
+    el('input', {type: 'checkbox', value: s.name, checked: ''}),
+    el('span', {}, s.name, el('small', {}, s.type + (s.detail ? ' · ' + s.detail : '')))));
+  await loadHistory(true);
+  pollJob();
+}
+
+async function loadHistory(openLatest) {
+  const scans = await api('/api/scans');
+  const h = $('#history'); h.replaceChildren();
+  if (!scans.length) { h.append(el('div', {class: 'empty'}, 'No scans yet')); return; }
+  for (const s of scans) h.append(el('a', {href: '#' + s.id, class: current?.id === s.id ? 'active' : '', on: {click: e => { e.preventDefault(); openScan(s.id); }}},
+    fmt(s.created), el('small', {}, `${s.flagged} flagged · ${s.headline || ''}`)));
+  const want = location.hash.slice(1) || (openLatest && scans[0].id);
+  if (want && (!current || current.id !== want)) openScan(want);
+}
+
+async function openScan(id) {
+  const s = await api('/api/scans/' + encodeURIComponent(id));
+  if (s.error) return;
+  current = s; history.replaceState(null, '', '#' + id);
+  document.querySelectorAll('.hist a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + id));
+  render();
+}
+
+function render() {
+  const s = current, a = s.analysis || {}, st = s.stats || {};
+  const byKey = Object.fromEntries((s.findings || []).map(f => [f.key, f]));
+  const m = $('#main'); m.replaceChildren();
+
+  const top = el('div', {class: 'card'},
+    el('p', {class: 'headline'}, a.headline || 'Scan complete'),
+    a.summary ? el('p', {class: 'summary'}, a.summary) : null,
+    el('div', {class: 'tiles'},
+      tile(st.events ?? 0, 'events read'), tile(st.clusters ?? 0, 'distinct patterns'),
+      tile(st.flagged ?? 0, 'worth a look'), tile((st.hosts || []).length, 'hosts'),
+      tile(s.duration_s + 's', 'scan time')),
+    ...(s.warnings || []).map(w => el('div', {class: 'warn'}, '⚠ ' + w)),
+    el('div', {class: 'summary', style: 'margin-top:8px;font-size:12px'},
+      `${fmt(s.created)} · window ${st.window} · reviewed by ${a._meta?.provider === 'none' ? 'rules only' : (a._meta?.provider + (a._meta?.model ? ' ' + a._meta.model : ''))}`));
+  m.append(top);
+
+  const tabs = el('div', {class: 'tabs'});
+  tabs.append(...[['findings', 'Findings'], ['raw', 'All flagged patterns'], ['ask', 'Ask the LLM']].map(([k, t]) =>
+    el('button', {class: tab === k ? 'on' : '', on: {click: () => { tab = k; render(); }}}, t)));
+  m.append(tabs);
+
+  if (tab === 'findings') {
+    const fs = a.findings || [];
+    const hosts = [...new Set(fs.map(f => f.host).filter(Boolean))];
+    const sel = (opts, key, label) => el('select', {'aria-label': label, on: {change: e => { filter[key] = e.target.value; render(); }}},
+      el('option', {value: ''}, label), ...opts.map(o => { const op = el('option', {value: o}, o); if (filter[key] === o) op.selected = true; return op; }));
+    m.append(el('div', {class: 'filters'}, sel(hosts, 'host', 'All hosts'), sel(['critical', 'high', 'medium', 'low'], 'imp', 'Any importance')));
+    const shown = fs.filter(f => (!filter.host || f.host === filter.host) && (!filter.imp || f.importance === filter.imp));
+    if (!shown.length) m.append(el('div', {class: 'card empty'}, fs.length ? 'Nothing matches the filter.' : 'Nothing needs your attention in this window.'));
+    for (const f of shown) {
+      const imp = (f.importance || 'low').toLowerCase();
+      const raws = (f.keys || []).map(k => byKey[k]).filter(Boolean);
+      m.append(el('div', {class: 'finding ' + imp},
+        el('h3', {}, el('span', {class: 'pill ' + imp}, imp), f.title, el('span', {class: 'host'}, f.host || '')),
+        el('dl', {},
+          f.what ? [el('dt', {}, 'What'), el('dd', {}, f.what)] : null,
+          f.why ? [el('dt', {}, 'Why'), el('dd', {}, f.why)] : null,
+          f.action ? [el('dt', {}, 'Do'), el('dd', {}, f.action)] : null,
+          f.related ? [el('dt', {}, 'Related'), el('dd', {}, f.related)] : null),
+        raws.length ? el('details', {}, el('summary', {}, `Evidence (${raws.reduce((n, r) => n + r.count, 0)} events)`),
+          ...raws.map(r => el('div', {},
+            el('div', {class: 'summary', style: 'font-size:12px;margin-top:6px'},
+              `${r.source} · ${r.program}${r.event_id ? ' #' + r.event_id : ''} · ${r.count}× · ${fmt(r.first)} → ${fmt(r.last)}${r.novel ? ' · NEW' : ''}`),
+            ...r.samples.map(x => el('pre', {}, x))))) : null));
+    }
+    if ((a.dismissed || []).length) m.append(el('details', {class: 'card'}, el('summary', {}, `Dismissed as noise (${a.dismissed.length})`),
+      ...a.dismissed.map(d => el('p', {}, el('b', {}, (d.keys || []).map(k => byKey[k]?.rule?.title || byKey[k]?.template?.slice(0, 60) || k).join(', ')), ': ', d.reason))));
+  } else if (tab === 'raw') {
+    const t = el('table', {}, el('tr', {}, ...['Score', 'Host', 'Source', 'Count', 'Rule', 'Latest message'].map(h => el('th', {}, h))));
+    for (const f of s.findings || []) t.append(el('tr', {},
+      el('td', {}, f.score + (f.novel ? ' ★' : '')), el('td', {}, f.host), el('td', {}, f.source + (f.event_id ? ' #' + f.event_id : '')),
+      el('td', {}, f.count), el('td', {}, f.rule?.title || '—'), el('td', {class: 'msg'}, f.samples[0]?.slice(0, 300) || '')));
+    m.append(el('div', {class: 'card', style: 'overflow-x:auto'}, (s.findings || []).length ? t : el('div', {class: 'empty'}, 'No events scored above the threshold.'),
+      el('p', {class: 'summary', style: 'font-size:12px'}, '★ = first time this pattern was seen on that host.')));
+  } else {
+    const q = el('textarea', {rows: 3, placeholder: 'e.g. Is the under-voltage on the Pi related to the SD card errors? What should I fix first?'});
+    const out = el('div', {class: 'answer'});
+    const btn = el('button', {on: {click: async () => {
+      if (!q.value.trim()) return;
+      btn.disabled = true; out.textContent = 'Thinking…';
+      const r = await api('/api/ask', {scan_id: s.id, question: q.value});
+      out.textContent = r.answer || ('Error: ' + r.error); btn.disabled = false;
+    }}}, 'Ask');
+    m.append(el('div', {class: 'card'}, el('h2', {}, 'Ask about this scan'), q, el('div', {class: 'row'}, btn), out));
+  }
+}
+const tile = (v, l) => el('div', {class: 'tile'}, el('b', {}, v), el('span', {}, l));
+
+$('#scanBtn').addEventListener('click', async () => {
+  const sources = [...document.querySelectorAll('#sources input:checked')].map(i => i.value);
+  const r = await api('/api/scan', {sources, window: $('#window').value, use_llm: $('#useLlm').checked});
+  if (!r.started) $('#joblog').textContent = r.error || 'A scan is already running.';
+  pollJob();
+});
+
+let polling = false;
+async function pollJob() {
+  if (polling) return; polling = true;
+  try {
+    for (;;) {
+      const j = await api('/api/job');
+      $('#scanBtn').disabled = j.running;
+      $('#scanBtn').textContent = j.running ? 'Scanning…' : 'Scan now';
+      $('#joblog').textContent = (j.log || []).slice(-12).join('\n') + (j.error ? '\nERROR: ' + j.error : '');
+      if (!j.running) {
+        if (j.scan_id && current?.id !== j.scan_id) { location.hash = j.scan_id; await loadHistory(); await openScan(j.scan_id); }
+        break;
+      }
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  } finally { polling = false; }
+}
+init();
+</script>
+</body>
+</html>

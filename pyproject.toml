@@ -1,0 +1,12 @@
+[project]
+name = "logagent"
+version = "0.1.0"
+description = "Ingest Windows/Linux/Pi/Jetson/app logs, surface the events worth your attention, summarize with your own LLM"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+logagent = "logagent.cli:main"
+
+[tool.setuptools.package-data]
+logagent = ["static/*.html"]

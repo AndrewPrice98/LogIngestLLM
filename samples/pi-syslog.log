@@ -1,0 +1,105 @@
+Nov  6 06:21:03 raspberrypi kernel: [ 1234.0] hwmon hwmon1: Undervoltage detected!
+Nov  6 06:22:03 raspberrypi kernel: [ 1234.1] hwmon hwmon1: Undervoltage detected!
+Nov  6 06:23:03 raspberrypi kernel: [ 1234.2] hwmon hwmon1: Undervoltage detected!
+Nov  6 06:31:03 raspberrypi kernel: [ 1300.1] mmc0: timeout waiting for hardware interrupt.
+Nov  6 06:32:03 raspberrypi kernel: [ 1300.2] blk_update_request: I/O error, dev mmcblk0, sector 123456 op 0x1:(WRITE) flags 0x800 phys_seg 1 prio class 0
+Nov  6 06:33:03 raspberrypi kernel: [ 1300.3] EXT4-fs error (device mmcblk0p2): ext4_find_entry:1455: inode #2: comm python3: reading directory lblock 0
+Nov  6 08:01:03 raspberrypi sshd[900]: Failed password for invalid user admin from 45.13.22.0 port 40000 ssh2
+Nov  6 08:02:03 raspberrypi sshd[901]: Failed password for invalid user admin from 45.13.22.1 port 40001 ssh2
+Nov  6 08:03:03 raspberrypi sshd[902]: Failed password for invalid user admin from 45.13.22.2 port 40002 ssh2
+Nov  6 08:04:03 raspberrypi sshd[903]: Failed password for invalid user admin from 45.13.22.3 port 40003 ssh2
+Nov  6 08:05:03 raspberrypi sshd[904]: Failed password for invalid user admin from 45.13.22.4 port 40004 ssh2
+Nov  6 08:06:03 raspberrypi sshd[905]: Failed password for invalid user admin from 45.13.22.0 port 40005 ssh2
+Nov  6 08:07:03 raspberrypi sshd[906]: Failed password for invalid user admin from 45.13.22.1 port 40006 ssh2
+Nov  6 08:08:03 raspberrypi sshd[907]: Failed password for invalid user admin from 45.13.22.2 port 40007 ssh2
+Nov  6 08:09:03 raspberrypi sshd[908]: Failed password for invalid user admin from 45.13.22.3 port 40008 ssh2
+Nov  6 08:10:03 raspberrypi sshd[909]: Failed password for invalid user admin from 45.13.22.4 port 40009 ssh2
+Nov  6 08:11:03 raspberrypi sshd[910]: Failed password for invalid user admin from 45.13.22.0 port 40010 ssh2
+Nov  6 08:12:03 raspberrypi sshd[911]: Failed password for invalid user admin from 45.13.22.1 port 40011 ssh2
+Nov  6 08:13:03 raspberrypi sshd[912]: Failed password for invalid user admin from 45.13.22.2 port 40012 ssh2
+Nov  6 08:14:03 raspberrypi sshd[913]: Failed password for invalid user admin from 45.13.22.3 port 40013 ssh2
+Nov  6 08:15:03 raspberrypi sshd[914]: Failed password for invalid user admin from 45.13.22.4 port 40014 ssh2
+Nov  6 08:16:03 raspberrypi sshd[915]: Failed password for invalid user admin from 45.13.22.0 port 40015 ssh2
+Nov  6 08:17:03 raspberrypi sshd[916]: Failed password for invalid user admin from 45.13.22.1 port 40016 ssh2
+Nov  6 08:18:03 raspberrypi sshd[917]: Failed password for invalid user admin from 45.13.22.2 port 40017 ssh2
+Nov  6 08:19:03 raspberrypi sshd[918]: Failed password for invalid user admin from 45.13.22.3 port 40018 ssh2
+Nov  6 08:20:03 raspberrypi sshd[919]: Failed password for invalid user admin from 45.13.22.4 port 40019 ssh2
+Nov  6 08:21:03 raspberrypi sshd[920]: Failed password for invalid user admin from 45.13.22.0 port 40020 ssh2
+Nov  6 08:22:03 raspberrypi sshd[921]: Failed password for invalid user admin from 45.13.22.1 port 40021 ssh2
+Nov  6 08:23:03 raspberrypi sshd[922]: Failed password for invalid user admin from 45.13.22.2 port 40022 ssh2
+Nov  6 08:24:03 raspberrypi sshd[923]: Failed password for invalid user admin from 45.13.22.3 port 40023 ssh2
+Nov  6 08:25:03 raspberrypi sshd[924]: Failed password for invalid user admin from 45.13.22.4 port 40024 ssh2
+Nov  6 08:26:03 raspberrypi sshd[925]: Failed password for invalid user admin from 45.13.22.0 port 40025 ssh2
+Nov  6 08:27:03 raspberrypi sshd[926]: Failed password for invalid user admin from 45.13.22.1 port 40026 ssh2
+Nov  6 08:28:03 raspberrypi sshd[927]: Failed password for invalid user admin from 45.13.22.2 port 40027 ssh2
+Nov  6 08:29:03 raspberrypi sshd[928]: Failed password for invalid user admin from 45.13.22.3 port 40028 ssh2
+Nov  6 08:30:03 raspberrypi sshd[929]: Failed password for invalid user admin from 45.13.22.4 port 40029 ssh2
+Nov  6 08:31:03 raspberrypi sshd[930]: Failed password for invalid user admin from 45.13.22.0 port 40030 ssh2
+Nov  6 08:32:03 raspberrypi sshd[931]: Failed password for invalid user admin from 45.13.22.1 port 40031 ssh2
+Nov  6 08:33:03 raspberrypi sshd[932]: Failed password for invalid user admin from 45.13.22.2 port 40032 ssh2
+Nov  6 08:34:03 raspberrypi sshd[933]: Failed password for invalid user admin from 45.13.22.3 port 40033 ssh2
+Nov  6 08:35:03 raspberrypi sshd[934]: Failed password for invalid user admin from 45.13.22.4 port 40034 ssh2
+Nov  6 08:36:03 raspberrypi sshd[935]: Failed password for invalid user admin from 45.13.22.0 port 40035 ssh2
+Nov  6 08:37:03 raspberrypi sshd[936]: Failed password for invalid user admin from 45.13.22.1 port 40036 ssh2
+Nov  6 08:38:03 raspberrypi sshd[937]: Failed password for invalid user admin from 45.13.22.2 port 40037 ssh2
+Nov  6 08:39:03 raspberrypi sshd[938]: Failed password for invalid user admin from 45.13.22.3 port 40038 ssh2
+Nov  6 08:40:03 raspberrypi sshd[939]: Failed password for invalid user admin from 45.13.22.4 port 40039 ssh2
+Nov  6 09:21:03 raspberrypi sshd[1200]: Accepted publickey for pi from 192.168.1.20 port 51514 ssh2
+Nov  6 09:41:03 raspberrypi systemd[1]: camera-stream.service: Main process exited, code=exited, status=1/FAILURE
+Nov  6 09:42:03 raspberrypi systemd[1]: camera-stream.service: Scheduled restart job, restart counter is at 1.
+Nov  6 09:43:03 raspberrypi systemd[1]: camera-stream.service: Scheduled restart job, restart counter is at 2.
+Nov  6 09:44:03 raspberrypi systemd[1]: camera-stream.service: Scheduled restart job, restart counter is at 3.
+Nov  6 09:45:03 raspberrypi systemd[1]: camera-stream.service: Scheduled restart job, restart counter is at 4.
+Nov  6 09:46:03 raspberrypi systemd[1]: camera-stream.service: Scheduled restart job, restart counter is at 5.
+Nov  6 09:47:03 raspberrypi systemd[1]: camera-stream.service: Scheduled restart job, restart counter is at 6.
+Nov  6 10:21:03 raspberrypi CRON[3000]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:22:03 raspberrypi CRON[3001]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:23:03 raspberrypi CRON[3002]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:24:03 raspberrypi CRON[3003]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:25:03 raspberrypi CRON[3004]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:26:03 raspberrypi CRON[3005]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:27:03 raspberrypi CRON[3006]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:28:03 raspberrypi CRON[3007]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:29:03 raspberrypi CRON[3008]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:30:03 raspberrypi CRON[3009]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:31:03 raspberrypi CRON[3010]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:32:03 raspberrypi CRON[3011]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:33:03 raspberrypi CRON[3012]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:34:03 raspberrypi CRON[3013]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:35:03 raspberrypi CRON[3014]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:36:03 raspberrypi CRON[3015]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:37:03 raspberrypi CRON[3016]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:38:03 raspberrypi CRON[3017]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:39:03 raspberrypi CRON[3018]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:40:03 raspberrypi CRON[3019]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:41:03 raspberrypi CRON[3020]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:42:03 raspberrypi CRON[3021]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:43:03 raspberrypi CRON[3022]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:44:03 raspberrypi CRON[3023]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:45:03 raspberrypi CRON[3024]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:46:03 raspberrypi CRON[3025]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:47:03 raspberrypi CRON[3026]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:48:03 raspberrypi CRON[3027]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:49:03 raspberrypi CRON[3028]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:50:03 raspberrypi CRON[3029]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:51:03 raspberrypi CRON[3030]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:52:03 raspberrypi CRON[3031]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:53:03 raspberrypi CRON[3032]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:54:03 raspberrypi CRON[3033]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:55:03 raspberrypi CRON[3034]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:56:03 raspberrypi CRON[3035]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:57:03 raspberrypi CRON[3036]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:58:03 raspberrypi CRON[3037]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:59:03 raspberrypi CRON[3038]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 11:00:03 raspberrypi CRON[3039]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 11:01:03 raspberrypi CRON[3040]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 11:02:03 raspberrypi CRON[3041]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 11:03:03 raspberrypi CRON[3042]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 11:04:03 raspberrypi CRON[3043]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 11:05:03 raspberrypi CRON[3044]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 11:06:03 raspberrypi CRON[3045]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 11:07:03 raspberrypi CRON[3046]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 11:08:03 raspberrypi CRON[3047]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 11:09:03 raspberrypi CRON[3048]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 11:10:03 raspberrypi CRON[3049]: (root) CMD (/usr/local/bin/backup.sh)
+Nov  6 10:51:03 raspberrypi kernel: [ 9000.1] Out of memory: Killed process 4242 (python3) total-vm:1902340kB, anon-rss:812340kB

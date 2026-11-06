@@ -52,10 +52,10 @@ Config: `logagent.toml` (gitignored; template `config.example.toml`). Tests: `py
 
 ## Laptop setup
 
-Gitignored, so it must be **copied from the desktop** (not in git): `models/` (trained adapter + evals),
-`data/` (scan history, baseline, owner feedback), `logagent.toml`. `.venv-train/` should be recreated, not copied.
-There is no git remote yet. Ask the owner how he moved the folder; if only the git repo came over, the
-adapter is missing and must be copied or retrained.
+The repo is on GitHub (private: `<owner>/LogIngestionLLM`). The trained adapter in `models/` is committed via
+**Git LFS** (`git lfs install` before cloning, or `git lfs pull` after). Not in git and copied separately if
+wanted: `data/` (scan history with raw log text from the desktop, baseline, owner feedback labels) and
+`logagent.toml` (machine-specific sources). `.venv-train/` should be recreated, not copied.
 
 1. Python 3.11+ for the app: `python -m pytest -q`, then `python -m logagent ui`. Works anywhere, rules-only if no model.
 2. **Check the laptop GPU first** (`nvidia-smi`). `trainer/serve.py` and `train.py` need an NVIDIA GPU

@@ -128,6 +128,27 @@ pre.sample{margin:6px 0 0;background:var(--bg);border:1px solid var(--line);padd
 .btn{background:var(--accent);color:#031015;border:0;padding:6px 14px;font-weight:700;border-radius:2px;cursor:pointer;margin-top:8px}
 .btn:disabled{opacity:.5}
 td.title{min-width:200px}
+/* ---------- learning + analyst tools */
+.learn{grid-column:1/-1;border-top:1px solid var(--line);padding:12px 16px;border-left:2px solid var(--accent)}
+.tok{border-bottom:1px dotted currentColor;cursor:help}
+.tok.ip{color:var(--accent)}.tok.user{color:var(--high)}.tok.port{color:var(--low)}.tok.code{color:var(--med)}
+.tok.pid{color:var(--muted)}.tok.path{color:var(--ok)}.tok.url{color:var(--crit)}.tok.time{color:var(--dim)}
+table.anat td{padding:3px 8px}table.anat td:first-child{white-space:nowrap}
+.cmd{margin:6px 0}.cmdrow{display:flex;gap:8px;align-items:flex-start;margin-top:2px}
+.cmdrow code{flex:1;background:var(--bg);border:1px solid var(--line);padding:5px 8px;font-size:11.5px;white-space:pre-wrap;word-break:break-all}
+.achip{display:inline-block;font-size:10px;padding:0 5px;margin:0 4px 2px 0;border:1px solid var(--accent2);color:var(--accent);border-radius:2px;text-decoration:none;font-weight:600}
+.achip.ctx{border-style:dashed;color:var(--muted);font-weight:400}
+.ichip{background:none;border:1px solid var(--line2);color:var(--text);padding:1px 6px;margin:0 4px 4px 0;border-radius:2px;cursor:pointer;font-size:11px}
+.ichip:hover{border-color:var(--accent)}
+.matrix{display:grid;grid-template-columns:repeat(12,minmax(128px,1fr));gap:4px;min-width:1560px}
+.tac{background:var(--panel);border:1px solid var(--line);min-height:90px}
+.tac.none{opacity:.45}
+.tac .th{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:6px;border-bottom:1px solid var(--line)}
+.tcell{display:flex;flex-direction:column;gap:1px;width:calc(100% - 8px);margin:4px;text-align:left;background:var(--panel2);border:1px solid var(--line2);border-left:3px solid var(--low);color:var(--text);padding:4px 6px;cursor:pointer;font-size:11px}
+.tcell.critical{border-left-color:var(--crit)}.tcell.high{border-left-color:var(--high)}.tcell.medium{border-left-color:var(--med)}.tcell.noise{border-left-color:var(--noise)}
+.tcell:hover{border-color:var(--accent)}
+.pivot{padding:3px 0;font-size:11.5px}
+.patf{padding:6px 18px;border-bottom:1px solid var(--line);background:var(--sel);font-size:11.5px}
 /* ---------- log locations */
 .mini{background:none;border:1px solid var(--line2);color:var(--muted);padding:0 6px;cursor:pointer;border-radius:2px;font-size:10px;letter-spacing:.08em;text-transform:uppercase}
 .mini:hover{color:var(--text);border-color:var(--accent)}
@@ -159,7 +180,7 @@ tr.dis td{color:var(--dim)}
   <div>privilege <b id="adm">…</b></div>
   <div>schedule <b id="sch">…</b></div>
   <div class="grow"></div>
-  <div><button id="tz" title="Toggle UTC / local time">UTC</button><button id="theme" title="Toggle theme">◐</button></div>
+  <div><button id="refBtn" title="What common log events mean (Windows IDs, Linux messages, ATT&CK)">REFERENCE</button><button id="tz" title="Toggle UTC / local time">UTC</button><button id="theme" title="Toggle theme">◐</button></div>
 </div>
 <div class="wrap">
   <aside>
@@ -244,6 +265,7 @@ async function init() {
   $('#tz').textContent = utc ? 'UTC' : 'LOCAL';
   sys = await api('/api/system');
   if (sys.error) sys = {};
+  api('/api/reference').then(r => { if (!r.error) { refCat = r; if (current || view !== 'scan') render(); } });
   const cfg = await api('/api/config');
   if (cfg.error) { $('#main').replaceChildren(el('div', {class: 'empty'}, cfg.error)); return; }
   if (cfg.window) $('#window').value = cfg.window;
@@ -297,6 +319,7 @@ async function loadHistory(openLatest) {
   if (!scans.length) h.append(el('div', {class: 'empty'}, 'no scans'));
   for (const s of scans) h.append(histItem(s));
   if (location.hash === '#locations') { if (view !== 'locations') openLocations(); return; }
+  if (location.hash === '#reference') { view = 'reference'; renderReference(); return; }
   if (!scans.length) return;
   const want = location.hash.slice(1) || (openLatest && scans[0].id);
   if (want && (!current || current.id !== want)) await openScan(want);
@@ -307,7 +330,9 @@ async function openScan(id) {
   if (s.error) return;
   fb = await api('/api/feedback/' + encodeURIComponent(id));
   if (fb.error) fb = {};
-  current = s; openKey = null; view = 'scan'; showAll = !!s.label;
+  current = s; openKey = null; view = 'scan'; showAll = !!s.label; patF = null; expl = {}; pivots = {};
+  if (pendingPivot) { const i = (s.iocs || []).find(x => x.type === pendingPivot.type && x.value === pendingPivot.value);
+    if (i) { patF = {label: `${i.type} ${i.value}`, keys: new Set(i.keys)}; showAll = true; tab = 'findings'; } pendingPivot = null; }
   history.replaceState(null, '', '#' + id);
   document.querySelectorAll('.hist a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + id));
   render();
@@ -345,6 +370,7 @@ function rows() {
 
 function render() {
   if (view === 'locations') return renderLocations();
+  if (view === 'reference') return renderReference();
   if (!current) { $('#main').replaceChildren(el('div', {class: 'empty'}, 'Select sources and run a scan, or open log locations to pick files.')); return; }
   const s = current, a = s.analysis || {}, st = s.stats || {}, meta = a._meta || {};
   const m = $('#main'); m.replaceChildren();
@@ -384,11 +410,15 @@ function render() {
       el('span', {style: `width:${sev[k] / totalSev * 100}%;background:${sevColors[k]}`}))));
 
   const tabs = el('div', {class: 'tabs'});
-  for (const [k, t] of [['findings', `Findings [${all.length}]`], ['sources', 'Sources'], ['query', 'Query model']])
+  const nTech = new Set([...(s.findings || []), ...(s.others || [])].flatMap(c => c.attack || [])).size;
+  for (const [k, t] of [['findings', `Findings [${all.length}]`], ['attack', `ATT&CK [${nTech}]`], ['iocs', `Indicators [${(s.iocs || []).length}]`],
+                        ['sources', 'Sources'], ['query', 'Query model']])
     tabs.append(el('button', {class: tab === k ? 'on' : '', on: {click: () => { tab = k; store.set('tab', k); render(); }}}, t));
   m.append(tabs);
 
   if (tab === 'findings') renderFindings(m, all);
+  else if (tab === 'attack') renderAttack(m);
+  else if (tab === 'iocs') renderIocs(m);
   else if (tab === 'sources') renderSources(m);
   else renderQuery(m);
 }
@@ -406,7 +436,9 @@ function renderFindings(m, all) {
       `+ unreviewed patterns (${(current.others || []).length + (current.findings || []).length})`)));
 
   const ql = q.toLowerCase();
-  let list = all.filter(r => levels.has(r.imp) && (!hostF || r.host === hostF) &&
+  if (patF) m.append(el('div', {class: 'patf'}, `showing only patterns with ${patF.label} `,
+    el('button', {class: 'mini', on: {click: () => { patF = null; render(); }}}, 'clear filter')));
+  let list = all.filter(r => (!patF || r.keys.some(k => patF.keys.has(k))) && (patF || levels.has(r.imp)) && (!hostF || r.host === hostF) &&
     (!ql || [r.title, r.host, r.source, r.program, r.event_id, r.why, ...r.raws.flatMap(x => x.samples)].join(' ').toLowerCase().includes(ql)));
   const key = {imp: r => LV.indexOf(r.imp) * 1000 - r.score, title: r => r.title, host: r => r.host, source: r => r.source + r.program,
     event_id: r => r.event_id, count: r => -r.count, rate: r => -(r.count / Math.max(1, new Date(r.last) - new Date(r.first))),
@@ -424,8 +456,9 @@ function renderFindings(m, all) {
     t.append(el('tr', {class: 'r' + (open ? ' open' : ''), on: {click: () => { openKey = open ? null : id; render(); }}},
       el('td', {}, el('span', {class: 'sev ' + r.imp}, r.imp)),
       el('td', {class: 'title'}, r.title, r.novel ? el('span', {class: 'new', title: 'first time this pattern appeared on this host'}, 'NEW') : null,
-        r.unreviewed ? el('span', {class: 'lbl', style: 'margin-left:6px'}, '(unreviewed)') : null),
-      el('td', {}, r.host), el('td', {class: 'msg'}, `${r.source} / ${r.program || '—'}`), el('td', {}, r.event_id || '—'),
+        r.unreviewed ? el('span', {class: 'lbl', style: 'margin-left:6px'}, '(unreviewed)') : null,
+        attackOf(r).length ? el('div', {}, ...attackOf(r).map(t => attackChip(t))) : null),
+      el('td', {}, r.host), el('td', {class: 'msg'}, `${r.source} / ${r.program || '—'}`), el('td', {title: r.source?.startsWith('windows') && winRef(r.event_id) ? `${r.event_id}: ${winRef(r.event_id).title}\n${winRef(r.event_id).meaning}` : ''}, r.event_id || '—'),
       el('td', {class: 'n'}, r.count), el('td', {class: 'n hide-sm'}, rate(r)),
       el('td', {class: 'ts hide-sm'}, ts(r.first)), el('td', {class: 'ts'}, ts(r.last)), el('td', {class: 'n'}, r.score.toFixed(1)),
       el('td', {}, lab ? el('span', {class: 'lbl ' + lab.verdict}, lab.verdict === 'noise' ? 'noise' : '✓ ' + (lab.importance || '')) : el('span', {class: 'lbl'}, '—'))));
@@ -437,12 +470,15 @@ function renderFindings(m, all) {
 function detail(r) {
   const p = r.raws[0];
   const kv = (pairs) => el('div', {class: 'kv'}, ...pairs.filter(([, v]) => v !== '' && v != null).flatMap(([k, v]) => [el('span', {}, k), el('span', {}, String(v))]));
+  const tech = attackOf(r), found = iocsFor(r.keys);
   return el('div', {class: 'dgrid'},
     el('div', {},
       el('dl', {class: 'prose'},
         r.why ? [el('dt', {}, 'assessment'), el('dd', {}, r.why)] : null,
         r.action ? [el('dt', {}, 'action'), el('dd', {}, r.action)] : null,
-        r.related ? [el('dt', {}, 'correlation'), el('dd', {}, r.related)] : null),
+        r.related ? [el('dt', {}, 'correlation'), el('dd', {}, r.related)] : null,
+        tech.length ? [el('dt', {}, 'MITRE ATT&CK'), el('dd', {}, ...tech.map(t => el('div', {}, attackChip(t), techName(t))))] : null,
+        found.length ? [el('dt', {}, `indicators (${found.length}) · click to find every pattern with one`), el('dd', {}, ...found.slice(0, 24).map(iocChip))] : null),
       fbControls(r)),
     el('div', {},
       kv([['occurrences', r.count], ['first seen', ts(r.first)], ['last seen', ts(r.last)], ['span', span(r)], ['rate', rate(r)],
@@ -453,7 +489,8 @@ function detail(r) {
       el('div', {class: 'h', style: 'margin-top:12px'}, el('span', {}, 'template')),
       el('pre', {class: 'sample'}, p.template),
       el('div', {class: 'h', style: 'margin-top:12px'}, el('span', {}, `samples (${r.raws.reduce((n, x) => n + x.samples.length, 0)} distinct, newest first)`)),
-      ...r.raws.flatMap(x => x.samples.map(sm => el('pre', {class: 'sample'}, sm)))));
+      ...r.raws.flatMap(x => x.samples.map(sm => el('pre', {class: 'sample'}, sm)))),
+    learnBox(r));
 }
 
 function fbControls(r) {
@@ -504,6 +541,192 @@ function renderQuery(m) {
     out.textContent = r.answer || ('error: ' + r.error); btn.disabled = false;
   }}}, 'QUERY');
   m.append(el('div', {class: 'pad'}, el('div', {class: 'h'}, el('span', {}, 'free-form question about this scan')), qa, btn, out));
+}
+
+// ---------- learning + analyst tools: explain an event, ATT&CK, indicators, reference
+let refCat = null, patF = null, expl = {}, iocType = '', iocPublic = false, iocQ = '', pivots = {}, pendingPivot = null, refQ = '';
+const winRef = id => (refCat?.windows || []).find(w => w.id === String(id));
+const techName = t => refCat?.techniques?.[t]?.name || t;
+const techUrl = t => 'https://attack.mitre.org/techniques/' + t.replace('.', '/') + '/';
+const attackOf = r => [...new Set(r.raws.flatMap(x => x.attack || []))];
+const iocsFor = keys => (current?.iocs || []).filter(i => i.keys.some(k => keys.includes(k)));
+function setPatF(label, keys) { patF = {label, keys: new Set(keys)}; showAll = true; tab = 'findings'; openKey = null; render(); }
+const attackChip = (t, mapped = true) => el('a', {class: 'achip' + (mapped ? '' : ' ctx'), href: techUrl(t), target: '_blank', rel: 'noopener',
+  title: techName(t) + (mapped ? '' : ' (context only: this kind of event is how the technique would show up, not evidence of it)'),
+  on: {click: e => e.stopPropagation()}}, t);
+const iocChip = i => el('button', {class: 'ichip', title: `${i.type}${i.scope ? ' · ' + i.scope : ''} · ${i.count} event(s): show every pattern with it`,
+  on: {click: e => { e.stopPropagation(); setPatF(`${i.type} ${i.value}`, i.keys); }}}, el('span', {class: 'lbl'}, i.type + ' '), i.value);
+
+function learnBox(r) {
+  const key = r.keys[0], x = expl[key];
+  const box = el('div', {class: 'learn', on: {click: e => e.stopPropagation()}});
+  if (!x) {
+    box.append(el('button', {class: 'btn sec', style: 'margin:0', on: {click: async () => {
+      expl[key] = {loading: true}; render();
+      const res = await api('/api/explain', {scan_id: current.id, key});
+      expl[key] = res; render();
+    }}}, 'EXPLAIN THIS EVENT'), el('span', {class: 'lbl', style: 'margin-left:10px'}, 'field-by-field breakdown, what normal looks like, and how to find it yourself'));
+    return box;
+  }
+  if (x.loading) { box.append(el('span', {class: 'lbl'}, 'reading…')); return box; }
+  if (x.error) { box.append(el('span', {class: 'result bad'}, x.error)); return box; }
+  const sec = t => el('div', {class: 'h', style: 'margin:14px 0 6px'}, el('span', {}, t));
+  const toks = x.segments.filter(s => s.kind);
+  box.append(sec('the line, annotated (hover or read the notes below)'),
+    el('pre', {class: 'sample anno'}, ...x.segments.map(s => s.kind ? el('span', {class: 'tok ' + s.kind, title: s.note}, s.t) : s.t)),
+    toks.length ? el('div', {class: 'kv', style: 'margin-top:6px'}, ...toks.slice(0, 12).flatMap(s => [el('span', {}, el('span', {class: 'tok ' + s.kind}, s.t)), el('span', {}, s.note)])) : null,
+    sec('anatomy'),
+    el('table', {class: 'anat'}, ...x.header.map(h => el('tr', {}, el('td', {class: 'lbl'}, h.part), el('td', {}, h.value ?? '—'), el('td', {class: 'msg'}, h.meaning))),
+      ...x.fields.map(f => el('tr', {}, el('td', {class: 'lbl'}, '· ' + f.name), el('td', {}, f.value), el('td', {class: 'msg'}, f.meaning || '')))),
+    sec('pattern'), el('pre', {class: 'sample'}, x.template), el('div', {class: 'lbl'}, x.template_note));
+  for (const ref of x.references) box.append(sec('reference: ' + (ref.id ? 'event ' + ref.id + ' · ' : '') + ref.title),
+    el('dl', {class: 'prose'}, ref.meaning ? [el('dt', {}, 'what it means'), el('dd', {}, ref.meaning)] : null,
+      ref.normal ? [el('dt', {}, 'normal'), el('dd', {}, ref.normal)] : null,
+      ref.suspicious ? [el('dt', {}, 'worth a closer look when'), el('dd', {}, ref.suspicious)] : null));
+  if (x.attack.length) box.append(sec('MITRE ATT&CK'), el('div', {class: 'kv', style: 'grid-template-columns:110px 1fr'},
+    ...x.attack.flatMap(a => [el('span', {}, attackChip(a.id, a.mapped)), el('span', {}, a.name + (a.mapped ? '' : '  (context only)'))])));
+  if (x.commands.length) {
+    box.append(sec('check it yourself'));
+    for (const c of x.commands) box.append(el('div', {class: 'cmd'}, el('div', {class: 'lbl'}, `${c.os} · ${c.label}`),
+      el('div', {class: 'cmdrow'}, el('code', {}, c.cmd), el('button', {class: 'mini', on: {click: e => {
+        navigator.clipboard?.writeText(c.cmd).then(() => { e.target.textContent = 'copied'; setTimeout(() => e.target.textContent = 'copy', 1200); }); }}}, 'copy'))));
+  }
+  if (x.score_reasons?.length || x.rule) box.append(sec('why it was ranked this way'), el('div', {class: 'msg'},
+    (x.rule ? `rule ${x.rule.id}: ${x.rule.title}. ` : 'no rule matched. ') + (x.score_reasons || []).join('; ')));
+  const lvl = el('select', {style: 'width:auto'}, el('option', {value: 'learning'}, 'explain for someone learning'), el('option', {value: 'analyst'}, 'brief for an analyst'));
+  if (x.level) lvl.value = x.level;
+  const ask = el('button', {class: 'btn', style: 'margin:0', on: {click: async () => {
+    ask.disabled = true; ask.textContent = 'MODEL THINKING…';
+    const res = await api('/api/explain', {scan_id: current.id, key, ask: true, level: lvl.value});
+    if (!res.error) expl[key] = {...res, level: lvl.value}; else expl[key].model_error = res.error;
+    render();
+  }}}, 'ASK MODEL');
+  box.append(sec('model explanation'), el('div', {class: 'row', style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap'}, lvl, ask,
+    el('span', {class: 'lbl'}, 'runs locally on your model, ~20-40 s')));
+  if (x.model_text) box.append(el('div', {class: 'answer'}, x.model_text));
+  if (x.model_error) box.append(el('div', {class: 'result bad', style: 'margin-top:6px'}, 'model: ' + x.model_error));
+  return box;
+}
+
+function allPatterns() {  // every pattern with its importance (model/rules verdict, else score) for ATT&CK/IOC views
+  const prev = showAll; showAll = true; const out = rows(); showAll = prev; return out;
+}
+
+function renderAttack(m) {
+  const pats = allPatterns().filter(r => attackOf(r).length);
+  const unmapped = rows().filter(r => !attackOf(r).length && r.imp !== 'noise').length;
+  const byTech = {};
+  for (const r of pats) for (const t of attackOf(r)) {
+    const b = byTech[t] ||= {keys: [], events: 0, imp: 4};
+    b.keys.push(...r.keys); b.events += r.count; b.imp = Math.min(b.imp, LV.indexOf(r.imp));
+  }
+  m.append(el('div', {class: 'tools'}, el('span', {class: 'lbl'},
+    `${Object.keys(byTech).length} technique(s) in ${pats.length} pattern(s). ${unmapped} flagged finding(s) are operational (hardware, storage, stability) and not ATT&CK behaviour. Click a technique to see its patterns.`)));
+  if (!refCat) { m.append(el('div', {class: 'empty'}, 'loading reference…')); return; }
+  const grid = el('div', {class: 'matrix'});
+  for (const tac of refCat.tactics) {
+    const techs = Object.keys(byTech).filter(t => refCat.techniques[t]?.tactics.includes(tac.id)).sort();
+    grid.append(el('div', {class: 'tac' + (techs.length ? '' : ' none')},
+      el('div', {class: 'th'}, tac.name, el('span', {class: 'lbl'}, ` ${tac.id}`)),
+      ...techs.map(t => { const b = byTech[t];
+        return el('button', {class: 'tcell ' + LV[b.imp], title: `${techName(t)}\n${b.keys.length} pattern(s), ${b.events} event(s)`,
+          on: {click: () => setPatF(`${t} ${techName(t)}`, b.keys)}},
+          el('b', {}, t), el('span', {}, techName(t).replace(/^[^:]+: /, '')), el('span', {class: 'lbl'}, `${b.keys.length} pat · ${b.events} ev`)); }),
+      techs.length ? null : el('div', {class: 'lbl', style: 'padding:6px'}, '—')));
+  }
+  m.append(el('div', {class: 'pad', style: 'overflow-x:auto'}, grid));
+  const t = el('table', {}, el('tr', {}, ...['technique', 'name', 'tactics', 'patterns', 'events', 'worst', ''].map(h => el('th', {}, h))),
+    ...Object.entries(byTech).sort((a, b) => a[1].imp - b[1].imp || b[1].events - a[1].events).map(([id, b]) => el('tr', {class: 'r', on: {click: () => setPatF(`${id} ${techName(id)}`, b.keys)}},
+      el('td', {}, attackChip(id)), el('td', {class: 'title'}, techName(id)),
+      el('td', {class: 'msg'}, (refCat.techniques[id]?.tactics || []).map(x => refCat.tactics.find(y => y.id === x)?.name).join(', ')),
+      el('td', {class: 'n'}, b.keys.length), el('td', {class: 'n'}, b.events), el('td', {}, el('span', {class: 'sev ' + LV[b.imp]}, LV[b.imp])), el('td', {class: 'lbl'}, 'show ▸'))));
+  if (Object.keys(byTech).length) m.append(el('div', {class: 'pad'}, t));
+}
+
+function renderIocs(m) {
+  const all = current.iocs || [];
+  const types = [...new Set(all.map(i => i.type))];
+  const ql = iocQ.toLowerCase();
+  const list = all.filter(i => (!iocType || i.type === iocType) && (!iocPublic || i.scope === 'public') && (!ql || i.value.toLowerCase().includes(ql)));
+  const csv = () => {
+    const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const lines = [['type', 'value', 'scope', 'events', 'patterns', 'hosts', 'first_utc', 'last_utc'].join(','),
+      ...list.map(i => [i.type, i.value, i.scope, i.count, i.keys.length, i.hosts.join(' '), new Date(i.first).toISOString(), new Date(i.last).toISOString()].map(q).join(','))];
+    const a = el('a', {href: URL.createObjectURL(new Blob([lines.join('\n')], {type: 'text/csv'})), download: `indicators-${current.id}.csv`});
+    document.body.append(a); a.click(); a.remove();
+  };
+  m.append(el('div', {class: 'tools'},
+    el('input', {type: 'text', placeholder: 'filter indicators', value: iocQ, style: 'width:220px',
+      on: {input: e => { iocQ = e.target.value; const pos = e.target.selectionStart; render(); const i = document.querySelector('.tools input[type=text]'); i.focus(); i.setSelectionRange(pos, pos); }}}),
+    el('button', {class: 'chip' + (!iocType ? ' on' : ''), style: !iocType ? 'background:var(--accent);border-color:var(--accent)' : '', on: {click: () => { iocType = ''; render(); }}}, 'all'),
+    ...types.map(t => el('button', {class: 'chip' + (iocType === t ? ' on' : ''), style: iocType === t ? 'background:var(--accent);border-color:var(--accent)' : '',
+      on: {click: () => { iocType = t; render(); }}}, `${t} ${all.filter(i => i.type === t).length}`)),
+    el('label', {class: 'chk', style: 'margin:0'}, el('input', {type: 'checkbox', checked: iocPublic, on: {change: e => { iocPublic = e.target.checked; render(); }}}), 'public IPs only'),
+    el('span', {style: 'flex:1'}), el('button', {class: 'mini', on: {click: csv}}, `export csv (${list.length})`)));
+  if (all.some(i => i.approx)) m.append(el('div', {class: 'alert'}, 'ⓘ this scan predates indicator extraction: indicators come from stored sample lines only, so counts are approximate. New scans read every event.'));
+  if (!list.length) { m.append(el('div', {class: 'empty'}, all.length ? 'no indicators match' : 'no indicators (IPs, domains, URLs, hashes, emails, users) in this scan')); return; }
+  const t = el('table', {}, el('tr', {}, ...['type', 'indicator', 'scope', 'events', 'patterns', 'hosts', 'first', 'last', ''].map(h => el('th', {}, h))));
+  for (const i of list.slice(0, 500)) {
+    const pk = i.type + '|' + i.value, pv = pivots[pk];
+    t.append(el('tr', {class: 'r'},
+      el('td', {}, el('span', {class: 'tag'}, i.type), i.scope && i.type !== 'ip' ? el('span', {class: 'lbl'}, i.scope) : null),
+      el('td', {class: 'title', style: 'font-family:var(--mono);font-size:12px;word-break:break-all'}, i.value),
+      el('td', {class: 'lbl', style: i.scope === 'public' ? 'color:var(--warn)' : ''}, i.type === 'ip' ? i.scope : '—'),
+      el('td', {class: 'n'}, i.count), el('td', {class: 'n'}, i.keys.length), el('td', {class: 'msg'}, i.hosts.join(', ')),
+      el('td', {class: 'ts'}, ts(i.first)), el('td', {class: 'ts'}, ts(i.last)),
+      el('td', {class: 'act'},
+        el('button', {class: 'mini', on: {click: () => setPatF(`${i.type} ${i.value}`, i.keys)}}, 'patterns'),
+        el('button', {class: 'mini' + (pv ? ' on' : ''), title: 'every saved scan where this indicator appears', on: {click: async () => {
+          if (pivots[pk]) { delete pivots[pk]; render(); return; }
+          pivots[pk] = {loading: true}; render();
+          const res = await api(`/api/pivot?type=${encodeURIComponent(i.type)}&value=${encodeURIComponent(i.value)}`);
+          pivots[pk] = res.error ? {error: res.error} : {hits: res}; render();
+        }}}, 'pivot'))));
+    if (pv) t.append(el('tr', {class: 'detail'}, el('td', {colspan: 9}, el('div', {class: 'pad', style: 'border-left:2px solid var(--accent)'},
+      pv.loading ? 'searching all scans…' : pv.error ? pv.error : el('div', {},
+        el('div', {class: 'h'}, el('span', {}, `${i.value} appears in ${pv.hits.length} scan(s)`)),
+        ...pv.hits.map(h => el('div', {class: 'pivot'},
+          el('a', {href: '#' + h.scan_id, on: {click: async e => { e.preventDefault(); pendingPivot = {type: i.type, value: i.value}; await openScan(h.scan_id); }}},
+            ts(h.created)), ' ', el('span', {class: 'lbl'}, h.label ? '⎘ ' + h.label : ''),
+          el('span', {class: 'msg'}, ` · ${h.count} event(s)${h.approx ? ' (approx)' : ''} · ${ts(h.first)} → ${ts(h.last)} · ${h.hosts.join(', ')} · `),
+          el('span', {}, h.patterns.map(p => p.title).filter(Boolean).slice(0, 4).join('; ')))))))));
+  }
+  m.append(t);
+}
+
+function renderReference() {
+  const m = $('#main'); m.replaceChildren();
+  m.append(el('div', {class: 'head'}, el('p', {class: 'headline'}, 'Log reference'),
+    el('p', {class: 'summary'}, 'What common events mean, what normal looks like, and when they deserve a closer look. Built in and offline. ATT&CK links open attack.mitre.org.')));
+  if (!refCat) { m.append(el('div', {class: 'empty'}, 'loading…')); return; }
+  const search = el('input', {type: 'text', placeholder: 'search: 4625, sshd, kerberos, T1110, lockout…', value: refQ, style: 'width:360px',
+    on: {input: e => { refQ = e.target.value; const pos = e.target.selectionStart; renderReference(); const i = $('#main .tools input'); i.focus(); i.setSelectionRange(pos, pos); }}});
+  m.append(el('div', {class: 'tools'}, search));
+  const ql = refQ.toLowerCase(), hit = (...xs) => !ql || xs.join(' ').toLowerCase().includes(ql);
+  const section = (title, head, rowsIn) => { if (!rowsIn.length) return;
+    m.append(el('div', {class: 'pad'}, el('div', {class: 'h'}, el('span', {}, `${title} [${rowsIn.length}]`)),
+      el('table', {}, el('tr', {}, ...head.map(h => el('th', {style: 'top:0'}, h))), ...rowsIn))); };
+  const chips = a => el('td', {}, ...(a || []).map(t => attackChip(t, false)));
+  section('Windows event IDs', ['id', 'event', 'what it means', 'normal', 'worth a closer look when', 'ATT&CK'],
+    refCat.windows.filter(w => hit(w.id, w.title, w.meaning, w.normal, w.suspicious, ...(w.attack || []))).map(w =>
+      el('tr', {}, el('td', {}, el('b', {}, w.id)), el('td', {class: 'title'}, w.title), el('td', {class: 'msg'}, w.meaning),
+        el('td', {class: 'msg'}, w.normal), el('td', {class: 'msg'}, w.suspicious), chips(w.attack))));
+  section('Sysmon event IDs', ['id', 'event', 'ATT&CK'], refCat.sysmon.filter(w => hit('sysmon', w.id, w.title, ...(w.attack || []))).map(w =>
+    el('tr', {}, el('td', {}, el('b', {}, w.id)), el('td', {class: 'title'}, w.title), chips(w.attack))));
+  section('Windows logon types (4624/4625 LogonType)', ['type', 'name', 'meaning'], refCat.logon_types.filter(l => hit('logon type', l.id, l.name, l.meaning)).map(l =>
+    el('tr', {}, el('td', {}, el('b', {}, l.id)), el('td', {class: 'title'}, l.name), el('td', {class: 'msg'}, l.meaning))));
+  section('Windows failure codes (Status / SubStatus)', ['code', 'meaning'], refCat.status_codes.filter(s => hit('status substatus failure', s.code, s.meaning)).map(s =>
+    el('tr', {}, el('td', {}, el('code', {}, s.code)), el('td', {class: 'msg'}, s.meaning))));
+  section('Linux / Unix messages', ['message', 'what it means', 'normal', 'worth a closer look when', 'ATT&CK'],
+    refCat.linux.filter(l => hit(l.title, l.pattern, l.meaning, l.normal, l.suspicious, ...(l.attack || []))).map(l =>
+      el('tr', {}, el('td', {class: 'title'}, l.title, el('div', {}, el('code', {class: 'lbl'}, l.pattern))), el('td', {class: 'msg'}, l.meaning),
+        el('td', {class: 'msg'}, l.normal), el('td', {class: 'msg'}, l.suspicious), chips(l.attack))));
+  section('Severity levels (syslog)', ['level', 'meaning'], Object.entries(refCat.severities).filter(([k, v]) => hit('severity', k, v)).map(([k, v]) =>
+    el('tr', {}, el('td', {}, el('b', {}, k)), el('td', {class: 'msg'}, v))));
+  section('Programs', ['program', 'what it is'], Object.entries(refCat.programs).filter(([k, v]) => hit(k, v)).map(([k, v]) =>
+    el('tr', {}, el('td', {}, el('b', {}, k)), el('td', {class: 'msg'}, v))));
+  section('MITRE ATT&CK techniques used here', ['technique', 'name', 'tactics'], Object.entries(refCat.techniques).filter(([k, v]) => hit(k, v.name, ...v.tactics)).map(([k, v]) =>
+    el('tr', {}, el('td', {}, attackChip(k)), el('td', {class: 'title'}, v.name), el('td', {class: 'msg'}, v.tactics.map(x => refCat.tactics.find(y => y.id === x)?.name).join(', ')))));
 }
 
 // ---------- log locations: configure, discover, browse, pick files to analyze
@@ -804,6 +1027,7 @@ $('#scanBtn').addEventListener('click', async () => {
   pollJob(!!r.started);
 });
 $('#locBtn').addEventListener('click', () => openLocations());
+$('#refBtn').addEventListener('click', () => { view = 'reference'; history.replaceState(null, '', '#reference'); renderReference(); });
 $('#tz').addEventListener('click', () => { utc = !utc; store.set('tz', utc ? 'utc' : 'local'); $('#tz').textContent = utc ? 'UTC' : 'LOCAL'; if (current) render(); loadHistory(); status(); });
 $('#theme').addEventListener('click', () => { const t = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = t; store.set('theme', t); });
 

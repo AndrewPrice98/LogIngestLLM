@@ -32,9 +32,12 @@ what to do. It has a local web dashboard and runs on **a model the owner trained
 | `llm.py` | providers `openai` (any OpenAI-compatible), `ollama`, `anthropic` (unused per owner), `none`. Two modes: whole-report JSON, or `mode="triage"` (one call per pattern, which is what the owner's model is trained on). `TRIAGE_PROMPT` + `triage_input()` are shared by training and inference, so **change them only together with a retrain** |
 | `locations.py` | dashboard "Log locations": `system_info()` (OS, usable source types), `validate_source()` (also guards ssh host/glob/unit injection), `save_sources()` (rewrites only the live `[[sources]]` tables of logagent.toml, verifies with tomllib, keeps `.bak`), `discover()` (per-OS log folders + journal + Event Log + `~/.ssh/config` hosts, time-bounded), `browse()` (files/units/channels to pick), `test_source()` |
 | `summary.py` | whole-log summary: `guess_origin()` (OS that produced the log, from source types + message evidence), `build_digest()` (compact stats/timeline/patterns, never raw logs), `heuristic_summary()` fallback |
+| `knowledge.py` | offline reference: ATT&CK techniques/tactics, `RULE_ATTACK` (rule → techniques), Windows event IDs, Sysmon, logon types, NTSTATUS codes, Linux message patterns, programs/fields. `STRONG_*` decides which entries are *mapped* vs context-only |
+| `explain.py` | "Explain this event": token highlighting, anatomy, decoded fields, references, `commands()` = native commands per origin OS (verified to run on journald and file sources) |
+| `iocs.py` | indicator extraction (ip with scope, domain with TLD allowlist, url, email, md5/sha1/sha256, user); `Collector` runs on every event during clustering; `from_clusters()` rebuilds approximate ones for old scans |
 | `engine.py` | scan pipeline; saves `data/scans/<id>.json` (findings + up to 300 lower-scored "others" for training negatives) |
 | `feedback.py` | owner's 👍/👎 + importance labels → `data/feedback.json` (training gold) |
-| `server.py` + `static/index.html` | dashboard on 127.0.0.1:8765; `/api/status` (model health, admin, schedule), scheduled scans (`schedule = "6h"`); `/api/system`, `/api/sources` (GET/POST), `/api/sources/test`, `/api/discover`, `/api/browse`; `/api/scan` takes `specs` (picked files/units) + `summarize` + `label`. File-browsing endpoints are refused when the dashboard is bound beyond localhost |
+| `server.py` + `static/index.html` | dashboard on 127.0.0.1:8765; `/api/status` (model health, admin, schedule), scheduled scans (`schedule = "6h"`); `/api/system`, `/api/sources` (GET/POST), `/api/sources/test`, `/api/discover`, `/api/browse`; `/api/scan` takes `specs` (picked files/units) + `summarize` + `label`; `/api/reference`, `/api/explain` (`ask` + `level` = learning/analyst uses `summary_model`), `/api/pivot?type=&value=`. File-browsing endpoints are refused when the dashboard is bound beyond localhost |
 | `train/synth.py`, `train/dataset.py` | synthetic Pi/Jetson/Linux/app scenarios + scans + feedback → `train_data/{train,eval}.jsonl` (`python -m logagent dataset`) |
 | `trainer/` | **separate venv** `.venv-train` (Python 3.12, torch cu128, transformers 5.x, peft, bitsandbytes). `train.py` (QLoRA, custom loop, fits 8 GB at `--batch-tokens 1024`), `evaluate.py`, `serve.py` (OpenAI-compatible on :8081, CUDA + 4-bit) |
 | `start-logagent.ps1` + `Start logagent*.bat` | launcher: starts serve.py if an adapter exists, waits for it, starts dashboard; `-Admin` self-elevates |
@@ -79,6 +82,11 @@ uv on Python 3.12 (torch 2.11.0+cu128, transformers 5.22, peft 0.21). Base weigh
 sources and pick individual files, journald units or channels to analyze; OS-aware whole-log summary via
 `summary_model = "logagent-base"` (serve.py disables the adapter for that model id; the adapter-on summary
 invented commands in testing, the base one was accurate). UI flows verified headless with Playwright + Edge.
+
+**Learner + analyst tools (2026-11-06, done):** explain panel, reference view, ATT&CK tab, indicators tab with
+cross-scan pivot and CSV. Scans now store `iocs` and per-cluster `attack`; `engine.load_scan` backfills both for older
+scans. The model's explain brief needs the pattern's indicators and the generated commands as input; without them it
+called a 5-IP brute force "a typo" and invented query syntax.
 
 ## Next steps (priority order)
 

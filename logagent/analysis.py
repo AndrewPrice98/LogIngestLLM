@@ -96,11 +96,14 @@ class Cluster:
         }
 
 
-def cluster_events(events: Iterable[Event], rules: list[Rule]) -> list[Cluster]:
+def cluster_events(events: Iterable[Event], rules: list[Rule], each=None) -> list[Cluster]:
+    """Group events by template. `each(event, key)` is called for every event (used for indicator extraction)."""
     clusters: dict[str, Cluster] = {}
     for e in events:
         tmpl = template_of(e.message)
         key = hashlib.sha1(f"{e.host}|{e.source}|{e.program}|{e.event_id}|{tmpl}".encode()).hexdigest()[:16]
+        if each:
+            each(e, key)
         c = clusters.get(key)
         if c is None:
             c = clusters[key] = Cluster(key, tmpl, e.host, e.source, e.program, e.event_id)

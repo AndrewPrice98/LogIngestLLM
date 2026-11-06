@@ -12,9 +12,9 @@ import webbrowser
 from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
-from . import __version__, engine, feedback, llm, locations
+from . import __version__, engine, explain, feedback, knowledge, llm, locations
 from .collectors.sources import parse_window
 
 STATIC = Path(__file__).parent / "static"
@@ -156,6 +156,14 @@ def make_handler(cfg: dict, job: Job, sched: dict):
                 return self._send(200, feedback.for_scan(cfg, path.rsplit("/", 1)[-1]))
             if path == "/api/job":
                 return self._send(200, job.snapshot())
+            if path == "/api/reference":
+                return self._send(200, knowledge.reference_catalog())
+            if path == "/api/pivot":
+                qs = parse_qs(urlparse(self.path).query)
+                kind, value = (qs.get("type") or [""])[0], (qs.get("value") or [""])[0]
+                if not kind or not value:
+                    return self._send(400, {"error": "type and value required"})
+                return self._send(200, engine.pivot(cfg, kind, value[:500]))
             if path == "/api/system":
                 return self._send(200, locations.system_info())
             if path == "/api/sources":
@@ -203,6 +211,24 @@ def make_handler(cfg: dict, job: Job, sched: dict):
                                                          body.get("importance"), body.get("note")))
                 except ValueError as exc:
                     return self._send(400, {"error": str(exc)})
+            if path == "/api/explain":
+                scan = engine.load_scan(cfg, str(body.get("scan_id", "")))
+                c = next((c for c in (scan or {}).get("findings", []) + (scan or {}).get("others", [])
+                          if c["key"] == str(body.get("key", ""))), None)
+                if not c:
+                    return self._send(400, {"error": "unknown scan or pattern"})
+                exp = explain.explain(c, scan)
+                if body.get("ask"):
+                    os_info = (scan.get("stats") or {}).get("os") or {}
+                    origin = os_info.get("origin") or ("Windows" if c["source"].startswith("windows") else "unknown")
+                    try:
+                        exp["model_text"] = llm.explain_event(exp, c, origin, os_info.get("viewer") or
+                                                              locations.system_info()["pretty"],
+                                                              str(body.get("level") or "learning"), cfg["llm"],
+                                                              [i for i in scan.get("iocs", []) if c["key"] in i["keys"]])
+                    except (llm.LLMError, KeyError, ValueError, TimeoutError, OSError) as exc:
+                        exp["model_error"] = str(exc)
+                return self._send(200, exp)
             if path == "/api/ask":
                 scan = engine.load_scan(cfg, str(body.get("scan_id", "")))
                 q = str(body.get("question", "")).strip()[:2000]

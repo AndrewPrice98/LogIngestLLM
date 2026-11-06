@@ -38,6 +38,13 @@ Open **LOG LOCATIONS** (top of the sidebar) to manage where logagent looks, with
 
 The summary is OS-aware: logagent works out which OS produced the log (from the source type and the messages themselves: Windows paths and providers, systemd units, `com.apple.*`, Raspberry Pi under-voltage, Jetson `nvgpu`...) and which OS you're viewing it on, and commands are written for the right one (e.g. "ssh into the Pi first" when you're reading a Pi's log on your laptop). Files over 100 MB are read from their newest 100 MB.
 
+## Learning to read logs, and analyst tools
+
+- **Explain this event** (open any finding): the line with its parts highlighted (IPs and whether they're public, users, ports, PIDs, status codes, paths), an anatomy table (when, host, source, program, event ID, severity, every Windows/journal field with what it means: logon types, NTSTATUS failure codes, Kerberos encryption types), what normally causes it and when it deserves a closer look, and **check it yourself**: the native command that shows the same events (`journalctl`, `grep`, `Get-WinEvent`, Event Viewer, `log show`), for the OS that produced the log. **Ask model** adds a plain-language walkthrough for someone learning, or a terse brief for an analyst.
+- **REFERENCE** (top bar): searchable, offline notes on Windows event IDs, Sysmon IDs, logon types, failure codes, common Linux messages, severities and programs.
+- **ATT&CK** tab: findings mapped to MITRE ATT&CK techniques, laid out by tactic; click a technique to see its patterns. Only evidence is mapped (rule hits and events that are notable in themselves, such as log clearing or account creation); routine events like a normal logon only show related techniques as context.
+- **Indicators** tab: every IP (public/private), domain, URL, email, file hash and user name, extracted from every event with exact counts. Click *patterns* to filter findings to it, *pivot* to find it in every saved scan, or export CSV.
+
 ## How it decides what's valuable
 
 1. **Collect** events from each source into one format (time, host, severity, program, message).

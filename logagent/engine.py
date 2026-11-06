@@ -8,7 +8,7 @@ from collections import Counter
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-from . import llm, summary as summ
+from . import iocs as ioc, knowledge, llm, summary as summ
 from .analysis import Baseline, cluster_events, score_clusters, select_findings
 from .collectors.sources import collect, parse_window, SourceError
 from .collectors.windows import CollectorError
@@ -80,7 +80,8 @@ def run_scan(cfg: dict, sources: list[dict] | None = None, window: str | None = 
         per_source[src_label] = len(events) - n0
 
     progress(f"{len(events)} events; clustering ...")
-    clusters = cluster_events(events, rules)
+    indicators = ioc.Collector()
+    clusters = cluster_events(events, rules, lambda e, key: indicators.add(e.message, e.fields, key, e.host, e.ts))
     baseline = Baseline(data_dir / "baseline.json")
     score_clusters(clusters, baseline)
     selected = select_findings(clusters, int(cfg.get("max_findings", 40)), float(cfg.get("min_score", 30)))
@@ -89,6 +90,8 @@ def run_scan(cfg: dict, sources: list[dict] | None = None, window: str | None = 
     # Lower-scored patterns are kept too: they are the "not important" examples for training.
     others = [c.to_dict() for c in sorted((c for c in clusters if c.key not in chosen),
                                           key=lambda c: (c.score, c.count), reverse=True)[:300]]
+    for d in findings + others:
+        d["attack"] = knowledge.attack_for(d)
 
     sev = Counter(e.severity_name for e in events)
     stats = {
@@ -137,7 +140,7 @@ def run_scan(cfg: dict, sources: list[dict] | None = None, window: str | None = 
         "created": datetime.now(timezone.utc).isoformat(),
         "duration_s": round(time.time() - t0, 1),
         "sources": [{k: v for k, v in s.items() if k not in ("identity",)} for s in sources],
-        "label": label, "summary": file_summary,
+        "label": label, "summary": file_summary, "iocs": indicators.result(),
         "stats": stats, "analysis": analysis, "findings": findings, "others": others,
         "warnings": warnings, "llm_error": llm_error,
     }
@@ -167,4 +170,34 @@ def load_scan(cfg: dict, scan_id: str) -> dict | None:
     if not scan_id.replace("-", "").isdigit():
         return None
     p = Path(cfg["data_dir"]) / "scans" / f"{scan_id}.json"
-    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else None
+    if not p.exists():
+        return None
+    scan = json.loads(p.read_text(encoding="utf-8"))
+    # Scans saved before ATT&CK mapping / indicator extraction existed get them now (indicators from samples only).
+    clusters = scan.get("findings", []) + scan.get("others", [])
+    for d in clusters:
+        if "attack" not in d:
+            d["attack"] = knowledge.attack_for(d)
+    if "iocs" not in scan:
+        scan["iocs"] = ioc.from_clusters(clusters)
+    return scan
+
+
+def pivot(cfg: dict, kind: str, value: str, limit: int = 200) -> list[dict]:
+    """Every saved scan in which an indicator appears, newest first, with the patterns it was in."""
+    out = []
+    for p in sorted((Path(cfg["data_dir"]) / "scans").glob("*.json"), reverse=True)[:limit]:
+        scan = load_scan(cfg, p.stem)
+        if not scan:
+            continue
+        hit = next((i for i in scan["iocs"] if i["type"] == kind and i["value"] == value), None)
+        if not hit:
+            continue
+        titles = {k: f.get("title") for f in scan["analysis"].get("findings", []) for k in f.get("keys", [])}
+        byk = {c["key"]: c for c in scan.get("findings", []) + scan.get("others", [])}
+        out.append({"scan_id": scan["id"], "created": scan["created"], "label": scan.get("label"),
+                    "headline": scan["analysis"].get("headline", ""), "count": hit["count"], "first": hit["first"],
+                    "last": hit["last"], "hosts": hit["hosts"], "approx": hit.get("approx", False),
+                    "patterns": [{"key": k, "title": titles.get(k) or ((byk.get(k) or {}).get("rule") or {}).get("title")
+                                  or (byk.get(k) or {}).get("template", "")[:100]} for k in hit["keys"][:10]]})
+    return out

@@ -10,7 +10,7 @@ Runs on your own LLM (Ollama, LM Studio, llama.cpp, vLLM...). Works with no LLM 
 
 Double-click **Start logagent** on the desktop (or `Start logagent.bat` here). It:
 
-1. starts your trained model in the background (if `models\*dapter` exists) and waits until it answers,
+1. starts your trained model in the background (if `models\*\adapter` exists) and waits until it answers,
 2. starts the dashboard at http://127.0.0.1:8765 and opens it,
 3. runs an automatic scan every 6 h (`schedule` in `logagent.toml`) while it's open.
 

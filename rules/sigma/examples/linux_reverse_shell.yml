@@ -1,0 +1,17 @@
+title: Shell Redirected to a Network Socket
+id: 4f9b2d1c-8e3a-4c5b-9d7e-1a2b3c4d5e63
+status: experimental
+description: A command connects an interactive shell to a remote host through /dev/tcp, the classic bash reverse shell.
+author: logagent examples
+tags:
+    - attack.execution
+    - attack.t1059.004
+logsource:
+    product: linux
+detection:
+    keywords:
+        - '/dev/tcp/'
+    condition: keywords
+falsepositives:
+    - Scripts that check if a port is open with /dev/tcp (no interactive shell)
+level: critical

@@ -48,6 +48,17 @@ def read_jsonl(path: str | Path) -> list[dict]:
         return [json.loads(l) for l in fh if l.strip()]
 
 
-def latest_adapter() -> Path | None:
-    runs = sorted((MODELS).glob("logagent-*/adapter"), key=lambda p: p.stat().st_mtime) if MODELS.exists() else []
+def newest_adapter() -> Path | None:
+    """The most recently trained adapter (by the timestamp in its folder name)."""
+    runs = sorted(MODELS.glob("logagent-*/adapter"), key=lambda p: p.parent.name) if MODELS.exists() else []
     return runs[-1] if runs else None
+
+
+def latest_adapter() -> Path | None:
+    """The adapter in use: the one models/ACTIVE names (set by trainer/promote.py), else the newest."""
+    active = MODELS / "ACTIVE"
+    if active.exists():
+        p = ROOT / active.read_text(encoding="utf-8").strip()
+        if (p / "adapter_config.json").exists():
+            return p
+    return newest_adapter()

@@ -74,3 +74,6 @@ channels = ["Microsoft-Windows-Windows Defender/Operational"]
 # pattern = "stripe.*(error|declined)"
 # why = "Customers can't pay."
 # action = "Check the provider status page and API key."
+
+# Sigma rules folder (default: rules/sigma in the app folder)
+# sigma_dir = "~/sigma-rules"

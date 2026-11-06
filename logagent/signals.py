@@ -26,6 +26,7 @@ class Rule:
     min_count: int = 1                  # only flag when the cluster has at least this many hits
     exclude: str | None = None          # regex: never match when the message contains this
     max_severity: int = 7               # only match events at least this severe (0=emerg .. 7=debug)
+    attack: tuple[str, ...] = ()        # ATT&CK technique ids (Sigma rules carry them in their tags)
     _rx: re.Pattern | None = field(default=None, repr=False)
     _ex: re.Pattern | None = field(default=None, repr=False)
 
@@ -96,6 +97,48 @@ BUILTIN_RULES: list[Rule] = [
       "(or one device with a stale password).",
       "Look at the account names and client addresses: many accounts from one address = spraying.",
       event_ids=("4771",), min_count=10),
+    R("win_rdp_failed", "Failed Remote Desktop logons", "security", 50,
+      "Failed RDP logons: someone is trying passwords against Remote Desktop.",
+      "If RDP is reachable from the internet, put it behind a VPN; block the source address.",
+      event_ids=("4625",), pattern=r"Logon\s?Type:\s*10\b", min_count=3),
+    R("win_explicit_creds", "Logon with explicit credentials", "security", 40,
+      "A process used another account's credentials (runas, mapped drives, or lateral movement tools).",
+      "Check the process and target server; unexpected ones can mean credential reuse by an intruder.",
+      event_ids=("4648",), exclude=r"Target\s?Server\s?Name:\s*localhost"),
+    R("win_admin_share", "Admin share accessed (ADMIN$ / C$)", "security", 55,
+      "Remote access to administrative shares is how PsExec-style tools copy and run programs on other machines.",
+      "Confirm the source account and machine are admins you expect.",
+      event_ids=("5140", "5145"), pattern=r"\\\\\*\\(ADMIN|C)\$|\b(ADMIN|C)\$"),
+    R("win_task_created", "Scheduled task created", "security", 55,
+      "Scheduled tasks are a common way to keep malware running.",
+      "Check the task's command and author; delete it if it isn't yours.", event_ids=("4698",)),
+    R("win_audit_policy", "Audit policy changed", "security", 70,
+      "Changing what Windows audits can blind you right before an attack.",
+      "Confirm the change came from group policy or an admin you trust.", event_ids=("4719",)),
+    R("win_account_enum", "Accounts or groups enumerated", "security", 40,
+      "Many group-membership lookups in a row can be reconnaissance (net user / net localgroup / PowerView).",
+      "Check which process did it; management tools do this too.", event_ids=("4798", "4799"), min_count=10),
+    R("win_ps_suspicious", "Suspicious PowerShell script block", "security", 75,
+      "PowerShell ran code that downloads, decodes or loads code in memory, or calls known offensive functions.",
+      "Read the script block; if nobody you trust ran it, investigate the host.",
+      event_ids=("4104", "4103"),
+      pattern=r"Invoke-(Mimikatz|Kerberoast|Shellcode|ReflectivePEInjection)|DownloadString|DownloadFile|FromBase64String|"
+              r"AmsiUtils|amsiInitFailed|Reflection\.Assembly\]::Load|-bxor|VirtualAlloc|Net\.Sockets\.TCPClient"),
+    R("win_ps_remote", "PowerShell remoting to another machine", "security", 50,
+      "Commands run on another computer over WinRM: normal for admins, also used for lateral movement.",
+      "Check the target computer and the account.", event_ids=("4104", "4103"),
+      pattern=r"Invoke-Command\b.{0,80}-ComputerName|Enter-PSSession|New-PSSession"),
+    R("win_sysmon_lsass", "Process accessed LSASS memory", "security", 85,
+      "Opening LSASS's memory is how credential dumpers (Mimikatz, procdump) steal passwords and hashes.",
+      "Identify the source process; unless it's security software, treat credentials on this host as stolen.",
+      providers=("Sysmon",), event_ids=("10",), pattern=r"lsass\.exe", exclude=r"MsMpEng\.exe|csrss\.exe|wininit\.exe"),
+    R("win_sysmon_remote_thread", "Code injected into another process", "security", 70,
+      "CreateRemoteThread starts code inside another process: a classic injection technique.",
+      "Check the source and target processes.", providers=("Sysmon",), event_ids=("8",)),
+    R("win_sysmon_run_key", "Program added to a Run key (starts at logon)", "security", 60,
+      "Run/RunOnce registry keys start programs at every logon: a common persistence spot.",
+      "Check the program path; remove the value if it isn't yours.", providers=("Sysmon",), event_ids=("13",),
+      pattern=r"\\CurrentVersion\\Run(Once)?\\"),
     # ------------------------------------------------ Windows: stability / hardware
     R("win_unexpected_shutdown", "Unexpected shutdown / power loss", "stability", 75,
       "The system rebooted without shutting down cleanly: crash, freeze, or power loss.",

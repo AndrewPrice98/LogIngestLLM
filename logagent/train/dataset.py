@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -21,19 +22,69 @@ from ..signals import load_rules
 from .synth import synthetic_events
 
 
+LEVELS = ["critical", "high", "medium", "low", "noise"]
+
+
 def imp_of(score: float) -> str:
     return "critical" if score >= 100 else "high" if score >= 75 else "medium" if score >= 50 else "low"
 
 
 def _facts(f: dict) -> str:
-    s = f"Seen {f['count']} time{'s' if f['count'] != 1 else ''} on {f['host']}"
+    """Specific facts, taken only from what the model sees in triage_input() (count, host, times, samples, fields)."""
+    from ..iocs import extract
+    n, first, last = f["count"], f["first"][:19], f["last"][:19]
+    s = f"Seen {n} time{'s' if n != 1 else ''} on {f['host']}"
+    if n > 1 and first != last:
+        s += f" between {first[11:16]} and {last[11:16]}" if first[:10] == last[:10] else f" from {first[:16]} to {last[:16]}"
+    else:
+        s += f" at {first[11:16]}"
+    fields = {k: str(v)[:80] for k, v in list((f.get("fields") or {}).items())[:8]}
+    found = extract((f.get("samples") or [""])[0][:400], fields)
+    ips = [(v, sc) for k, v, sc in found if k == "ip" and sc not in ("loopback",)][:2]
+    users = [v for k, v, _ in found if k == "user"][:2]
+    if ips:
+        s += ", from " + " and ".join(f"{v}{' (' + sc + ')' if sc in ('public', 'private') else ''}" for v, sc in ips)
+    if users:
+        s += ", user " + " and ".join(users)
     if f.get("novel"):
         s += ", the first time this pattern has appeared on this host"
     return s + "."
 
 
+TOOL_LEVEL = {"attacker": "critical", "miner": "high", "lolbin": "high", "tunnel": "high", "scanner": "medium",
+              "remote-access": "medium"}
+TOOL_ACTION = {
+    "attacker": "Treat the host as compromised: isolate it, find how the attacker got in, and reset credentials used on it.",
+    "miner": "Kill the miner, remove what restarts it (cron jobs, services), and find how it got onto the machine.",
+    "lolbin": "Check whether you or an admin tool ran this; if not, look at what it downloaded or changed and what ran next.",
+    "tunnel": "Find who started the tunnel and close it unless it is yours.",
+    "scanner": "Block the scanning address if it isn't yours and check the targeted URLs or ports for successful hits.",
+    "remote-access": "Confirm this remote-access software is expected on this machine and who uses it.",
+}
+
+
+def _tool_of(f: dict) -> tuple[str, str, str] | None:
+    """(name, category, what) when a catalog tool was detected in this pattern (tools.boost adds the reason)."""
+    from ..tools import CATALOG
+    for r in f.get("reasons") or []:
+        if r.startswith("tool: "):
+            name = re.sub(r" \(\+\d+\)$", "", r[6:])
+            hit = next((c for c in CATALOG if c[0] == name), None)
+            if hit:
+                return hit[0], hit[1], hit[2]
+    return None
+
+
 def weak_label(f: dict) -> dict:
     r = f.get("rule")
+    tool = _tool_of(f)
+    if tool:
+        name, cat, what = tool
+        imp = TOOL_LEVEL.get(cat, "medium")
+        if r and f["score"] >= 30 and LEVELS.index(imp_of(f["score"])) < LEVELS.index(imp):
+            imp = imp_of(f["score"])
+        return {"importance": imp, "title": r["title"] if r else name,
+                "why": f"{name}: {what}. {_facts(f)}", "action": TOOL_ACTION.get(cat, "Check who ran it and why.")}
     if r and f["score"] >= 30:
         return {"importance": imp_of(f["score"]), "title": r["title"], "why": f"{r['why']} {_facts(f)}",
                 "action": r["action"]}
@@ -104,8 +155,11 @@ def build(cfg: dict, out_dir: str | Path, n_synthetic: int = 400, seed: int = 7,
 
     rules = load_rules(cfg.get("rules"))
     synth_eval_every = 10
+    from ..tools import Collector, boost
     for i, evs in enumerate(synthetic_events(n_synthetic, seed)):
-        clusters = score_clusters(cluster_events(evs, rules))
+        col = Collector()
+        clusters = score_clusters(cluster_events(evs, rules, lambda e, k: col.add(e, k)))
+        boost(clusters, col)
         for c in clusters:
             f = c.to_dict()
             ex = example(f, weak_label(f), {"src": "synthetic", "scan": f"synth-{i}", "key": f["key"]}, rnd)

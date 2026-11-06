@@ -1,0 +1,42 @@
+Nov  4 08:00:00 laptop kernel: Linux version 6.11.4-301.fc41.x86_64 (mockbuild@fedoraproject.org)
+Nov  4 08:00:01 laptop systemd[1]: Started systemd-journald.service - Journal Service.
+Nov  4 08:00:03 laptop NetworkManager[812]: <info>  [1730707202.1] dhcp4 (wlp2s0): state changed new lease, address=192.168.1.20
+Nov  4 08:00:04 laptop chronyd[790]: Selected source 162.159.200.1 (2.fedora.pool.ntp.org)
+Nov  4 08:00:07 laptop systemd[1]: Started NetworkManager-dispatcher.service - Network Manager Script Dispatcher Service.
+Nov  4 08:00:12 laptop systemd-logind[801]: New session 2 of user mreyes.
+Nov  4 08:00:13 laptop systemd[1]: Started session-2.scope - Session 2 of User mreyes.
+Nov  4 08:10:13 laptop CRON[3100]: (root) CMD (run-parts /etc/cron.hourly)
+Nov  4 08:10:15 laptop systemd[1]: Started dnf-makecache.service - dnf makecache.
+Nov  4 08:20:15 laptop CRON[3101]: (mreyes) CMD (/usr/bin/vdirsyncer sync)
+Nov  4 08:20:17 laptop systemd[1]: Started fwupd-refresh.service - Refresh fwupd metadata.
+Nov  4 08:30:17 laptop CRON[3102]: (mreyes) CMD (/usr/bin/vdirsyncer sync)
+Nov  4 08:30:19 laptop systemd[1]: Started fwupd-refresh.service - Refresh fwupd metadata.
+Nov  4 08:40:19 laptop CRON[3103]: (mreyes) CMD (/usr/bin/vdirsyncer sync)
+Nov  4 08:40:21 laptop systemd[1]: Started fwupd-refresh.service - Refresh fwupd metadata.
+Nov  4 08:50:21 laptop CRON[3104]: (mreyes) CMD (/usr/bin/vdirsyncer sync)
+Nov  4 08:50:23 laptop systemd[1]: Started dnf-makecache.service - dnf makecache.
+Nov  4 09:00:23 laptop CRON[3105]: (mreyes) CMD (/usr/bin/vdirsyncer sync)
+Nov  4 09:00:25 laptop systemd[1]: Started fwupd-refresh.service - Refresh fwupd metadata.
+Nov  4 09:10:25 laptop CRON[3106]: (root) CMD (run-parts /etc/cron.hourly)
+Nov  4 09:10:27 laptop systemd[1]: Started fwupd-refresh.service - Refresh fwupd metadata.
+Nov  4 09:20:27 laptop CRON[3107]: (mreyes) CMD (/usr/bin/vdirsyncer sync)
+Nov  4 09:20:29 laptop systemd[1]: Started fwupd-refresh.service - Refresh fwupd metadata.
+Nov  4 09:30:29 laptop CRON[3108]: (mreyes) CMD (/usr/bin/vdirsyncer sync)
+Nov  4 09:30:31 laptop systemd[1]: Started dnf-makecache.service - dnf makecache.
+Nov  4 09:40:31 laptop CRON[3109]: (mreyes) CMD (/usr/bin/vdirsyncer sync)
+Nov  4 09:40:33 laptop systemd[1]: Started fwupd-refresh.service - Refresh fwupd metadata.
+Nov  4 09:50:33 laptop CRON[3110]: (mreyes) CMD (/usr/bin/vdirsyncer sync)
+Nov  4 09:50:35 laptop systemd[1]: Started fwupd-refresh.service - Refresh fwupd metadata.
+Nov  4 10:00:35 laptop CRON[3111]: (mreyes) CMD (/usr/bin/vdirsyncer sync)
+Nov  4 10:00:37 laptop systemd[1]: Started fwupd-refresh.service - Refresh fwupd metadata.
+Nov  4 10:01:07 laptop dnf[4410]: Installed: firefox-139.0-1.fc41.x86_64
+Nov  4 10:01:11 laptop dnf[4410]: Upgraded: kernel-6.11.5-300.fc41.x86_64
+Nov  4 10:02:11 laptop sshd[4520]: Accepted publickey for mreyes from 192.168.1.30 port 51544 ssh2: ED25519 SHA256:k7Qd2
+Nov  4 10:02:12 laptop sshd[4520]: pam_unix(sshd:session): session opened for user mreyes(uid=1000) by mreyes(uid=0)
+Nov  4 10:02:32 laptop sudo[4600]:   mreyes : TTY=pts/1 ; PWD=/home/mreyes ; USER=root ; COMMAND=/usr/bin/dnf upgrade --refresh
+Nov  4 10:07:32 laptop kernel: [ 5321.120] usb 3-2: new full-speed USB device number 5 using xhci_hcd
+Nov  4 10:07:33 laptop kernel: [ 5321.300] input: Logitech M705 as /devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2:1.2/input/input22
+Nov  4 10:17:33 laptop sshd[4520]: Received disconnect from 192.168.1.30 port 51544:11: disconnected by user
+Nov  4 10:17:34 laptop systemd-logind[801]: Session 2 logged out. Waiting for processes to exit.
+Nov  4 10:32:34 laptop systemd[1]: Starting systemd-tmpfiles-clean.service - Cleanup of Temporary Directories...
+Nov  4 10:32:35 laptop systemd[1]: Finished systemd-tmpfiles-clean.service - Cleanup of Temporary Directories.

@@ -119,6 +119,8 @@ def validate_source(spec: dict) -> dict:
     out: dict = {"name": _str(spec.get("name") or "", "name", 60), "type": kind}
     if kind in ("files", "syslog", "app", "evtx"):
         out["path"] = _str(spec.get("path"), "path")
+    if kind in ("files", "syslog", "app") and spec.get("host"):
+        out["host"] = _str(spec["host"], "host", 120)
     if kind == "files":
         fmt = str(spec.get("format") or "auto").lower()
         if fmt not in FORMATS:
@@ -217,7 +219,8 @@ def save_sources(cfg: dict, sources: list) -> list[dict]:
     if path.exists():
         text = path.read_text(encoding="utf-8")
     else:
-        example = Path(__file__).resolve().parents[1] / "config.example.toml"
+        from .paths import resource
+        example = resource("config.example.toml")
         text = example.read_text(encoding="utf-8") if example.exists() else ""
     old = tomllib.loads(text) if text.strip() else {}
     new_text = _replace_sources(text, clean)

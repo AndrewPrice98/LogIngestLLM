@@ -49,6 +49,8 @@ TECHNIQUES = {  # id: (name, [tactic ids])
     "T1562.002": ("Impair Defenses: Disable Windows Event Logging", ["TA0005"]),
     "T1569.002": ("System Services: Service Execution", ["TA0002"]),
     "T1047": ("Windows Management Instrumentation", ["TA0002"]),
+    "T1021.006": ("Remote Services: Windows Remote Management", ["TA0008"]),
+    "T1547.001": ("Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder", ["TA0003", "TA0004"]),
     "T1105": ("Ingress Tool Transfer", ["TA0011"]),
     "T1190": ("Exploit Public-Facing Application", ["TA0001"]),
     "T1218.005": ("System Binary Proxy Execution: Mshta", ["TA0005"]),
@@ -80,6 +82,17 @@ RULE_ATTACK = {
     "win_rdp_logon": ["T1021.001", "T1078"],
     "win_volsnap": ["T1490"],
     "win_kerberoast": ["T1558.003"],
+    "win_rdp_failed": ["T1110", "T1021.001"],
+    "win_explicit_creds": ["T1078"],
+    "win_admin_share": ["T1021.002"],
+    "win_task_created": ["T1053.005"],
+    "win_audit_policy": ["T1562.002"],
+    "win_account_enum": ["T1087"],
+    "win_ps_suspicious": ["T1059.001"],
+    "win_ps_remote": ["T1021.006"],
+    "win_sysmon_lsass": ["T1003.001"],
+    "win_sysmon_remote_thread": ["T1055"],
+    "win_sysmon_run_key": ["T1547.001"],
     "win_kerberos_preauth_burst": ["T1110"],
     "lx_ssh_bruteforce": ["T1110.001", "T1021.004"],
     "lx_ssh_accepted": ["T1021.004", "T1078"],
@@ -418,15 +431,28 @@ def references(cluster: dict) -> list[dict]:
     return out
 
 
+# A successful remote login is only ATT&CK evidence when it comes from outside the local network;
+# your own SSH/RDP from the LAN is routine.
+EXTERNAL_ONLY = {"lx_ssh_accepted", "win_rdp_logon"}
+_IP_IN_TEXT = re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])")
+
+
+def _from_outside(cluster: dict) -> bool:
+    from .iocs import _ip_scope
+    text = " ".join(cluster.get("samples") or []) + " " + " ".join(str(v) for v in (cluster.get("fields") or {}).values())
+    return any(_ip_scope(ip) in ("public", "reserved") for ip in _IP_IN_TEXT.findall(text))
+
+
 def attack_for(cluster: dict) -> list[str]:
     """Mapped techniques for a cluster: from its rule, then from reference entries that are notable in themselves."""
     ids: list[str] = []
     rule = cluster.get("rule") or {}
-    ids += RULE_ATTACK.get(rule.get("id", ""), [])
+    if rule.get("id") not in EXTERNAL_ONLY or _from_outside(cluster):
+        ids += RULE_ATTACK.get(rule.get("id", ""), []) + list(rule.get("attack") or [])
     for ref in references(cluster):
         if ref.get("strong"):
             ids += ref.get("attack", [])
-    return [t for t in dict.fromkeys(ids) if t in TECHNIQUES]
+    return [t for t in dict.fromkeys(ids) if t in TECHNIQUES or re.fullmatch(r"T\d{4}(\.\d{3})?", t)]
 
 
 def reference_catalog() -> dict:

@@ -74,6 +74,8 @@ def test_logview_gzip(tmp_path):
 def test_web_access_log_times(tmp_path):
     e = next(parse_app_log(['1.2.3.4 - - [05/Nov/2026:01:50:03 +0000] "GET / HTTP/1.1" 503 0 "-" "curl/8"'], "web"))
     assert e.ts.isoformat() == "2026-11-05T01:50:03+00:00" and e.severity == 3 and e.fields["status"] == "503"
+    denied = next(parse_app_log(['1.2.3.4 - - [05/Nov/2026:01:50:04 +0000] "GET /admin HTTP/1.1" 403 0 "-" "curl/8"'], "web"))
+    assert denied.severity == 5
 
 
 def test_cited_ids():

@@ -9,3 +9,9 @@ logagent.toml.tmp
 train_data/
 # trained adapters are committed via Git LFS; HF caches/checkpoints are not
 models/**/checkpoint-*/
+export/
+demo_data/
+models/copilot-eval-static-*.json
+engine/
+model/
+dist/

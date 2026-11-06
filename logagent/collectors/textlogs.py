@@ -10,7 +10,7 @@ import re
 from datetime import datetime, timezone, timedelta
 from typing import Iterable, Iterator
 
-from ..model import Event, INFO, ERR, WARNING, severity_from_word, ensure_aware
+from ..model import Event, INFO, ERR, NOTICE, WARNING, severity_from_word, ensure_aware
 
 class Line(str):
     """A text line that remembers where it came from (1-based line number and byte offset; either may be None)."""

@@ -97,7 +97,7 @@ class Cluster:
             "sample_locs": [e.loc or None for e in se],
             "first_loc": min(self.events, key=lambda e: e.ts).loc or None, "last_loc": last.loc or None,
             "rule": None if not r else {"id": r.id, "title": r.title, "category": r.category,
-                                        "why": r.why, "action": r.action},
+                                        "why": r.why, "action": r.action, **({"attack": list(r.attack)} if r.attack else {})},
             "fields": {k: v for k, v in last.fields.items() if v not in (None, "", "-")} if last.fields else {},
         }
 

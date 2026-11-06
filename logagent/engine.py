@@ -27,29 +27,65 @@ DEFAULT_CONFIG = {
 
 def load_config(path: str | Path | None) -> dict:
     cfg = json.loads(json.dumps(DEFAULT_CONFIG))
+    user_llm = None
     if path and Path(path).exists():
         with open(path, "rb") as fh:
             user = tomllib.load(fh)
+        user_llm = user.get("llm")
         for k, v in user.items():
             if isinstance(v, dict) and isinstance(cfg.get(k), dict):
                 cfg[k].update(v)
             else:
                 cfg[k] = v
     cfg["_path"] = str(path) if path else None
+    from . import paths
+    if paths.FROZEN and not Path(cfg["data_dir"]).is_absolute():
+        cfg["data_dir"] = str(paths.user_dir() / cfg["data_dir"])  # never write next to the executable
+    from . import bundled
+    if (cfg["llm"].get("provider") in (None, "", "none") and "provider" not in (user_llm or {})) and bundled.available():
+        cfg["llm"] = {**bundled.DEFAULT_LLM, **{k: v for k, v in cfg["llm"].items() if k != "provider"}}
     return cfg
+
+
+def _new_id(scans: Path) -> str:
+    """Timestamp id; scans finishing in the same second get -2, -3 ... instead of overwriting each other."""
+    base, n = datetime.now().strftime("%Y%m%d-%H%M%S"), 1
+    sid = base
+    while (scans / f"{sid}.json").exists():
+        n += 1
+        sid = f"{base}-{n}"
+    return sid
+
+
+_sigma_cache: dict = {}
+
+
+def _sigma(cfg: dict):
+    """Sigma rules from sigma_dir (default rules/sigma), cached until a file in the folder changes."""
+    from . import sigma
+    from .paths import resource
+    d = Path(cfg.get("sigma_dir") or resource("rules/sigma")).expanduser()
+    files = sorted(list(d.rglob("*.yml")) + list(d.rglob("*.yaml"))) if d.is_dir() else []
+    stamp = (str(d), len(files), max((f.stat().st_mtime for f in files), default=0))
+    if _sigma_cache.get("stamp") != stamp:
+        _sigma_cache.update(stamp=stamp, value=sigma.load_dir(d))
+    return _sigma_cache["value"]
 
 
 def _heuristic_report(findings: list[dict]) -> dict:
     """Readable result when no LLM is configured (or the LLM call failed)."""
     imp = lambda s: "critical" if s >= 100 else "high" if s >= 75 else "medium" if s >= 50 else "low"
     out = []
+    from .train.dataset import _tool_of, weak_label
     for f in findings[:15]:
         r = f["rule"] or {}
+        tool = _tool_of(f) and weak_label(f)  # a tool signature names the finding better than the raw message
         out.append({
-            "keys": [f["key"]], "title": r.get("title") or f["template"][:80], "importance": imp(f["score"]),
+            "keys": [f["key"]], "title": r.get("title") or (tool or {}).get("title") or f["template"][:80],
+            "importance": imp(f["score"]),
             "host": f["host"], "what": f"{f['count']}x {f['program'] or f['source']}: {f['samples'][0][:300]}",
-            "why": r.get("why") or "High-severity event not covered by a known rule.",
-            "action": r.get("action") or "Read the sample message and check the program named.",
+            "why": r.get("why") or (tool or {}).get("why") or "High-severity event not covered by a known rule.",
+            "action": r.get("action") or (tool or {}).get("action") or "Read the sample message and check the program named.",
         })
     top = out[0]["title"] + f" on {out[0]['host']}" if out else "Nothing needs your attention"
     return {"headline": top, "summary": "", "findings": out, "dismissed": []}
@@ -61,6 +97,8 @@ def run_scan(cfg: dict, sources: list[dict] | None = None, window: str | None = 
     data_dir = Path(cfg["data_dir"])
     win = parse_window(window or cfg.get("window"))
     rules = load_rules(cfg.get("rules"))
+    sigma_rules, sigma_skipped = _sigma(cfg)
+    rules += sigma_rules
     sources = sources if sources is not None else cfg.get("sources", [])
     warnings: list[str] = []
 
@@ -104,6 +142,7 @@ def run_scan(cfg: dict, sources: list[dict] | None = None, window: str | None = 
         "window": window or cfg.get("window") or "24h", "events": len(events), "clusters": len(clusters), "flagged": len(findings),
         "hosts": sorted({e.host for e in events}), "per_source": per_source,
         "by_severity": dict(sev), "rule_hits": dict(Counter(c.rule.id for c in clusters if c.rule).most_common(20)),
+        "sigma": {"loaded": len(sigma_rules), "skipped": len(sigma_skipped)},
     }
     from .locations import system_info
     viewer = system_info()
@@ -165,7 +204,7 @@ def run_scan(cfg: dict, sources: list[dict] | None = None, window: str | None = 
 
     baseline.update(clusters)
     scan = {
-        "id": datetime.now().strftime("%Y%m%d-%H%M%S"),
+        "id": _new_id(data_dir / "scans"),
         "created": datetime.now(timezone.utc).isoformat(),
         "duration_s": round(time.time() - t0, 1),
         "sources": [{k: v for k, v in s.items() if k not in ("identity",)} for s in sources],

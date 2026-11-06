@@ -132,6 +132,14 @@ def chat(system: str, user: str, cfg: dict, json_mode: bool = False) -> tuple[st
             payload["response_format"] = {"type": "json_object"}
         resp = _post(f"{base}/chat/completions", payload, {"authorization": f"Bearer {key}"} if key else {}, timeout)
         return resp["choices"][0]["message"]["content"], resp.get("usage", {})
+    if provider == "bundled":
+        from . import bundled
+        try:
+            text = bundled.ENGINE.chat(system, user, adapter=cfg.get("model") != cfg.get("summary_model", "logagent-base"),
+                                       max_tokens=max_tokens, temperature=0.2, json_mode=json_mode, timeout=timeout)
+        except (RuntimeError, urllib.error.URLError, OSError, KeyError, ValueError) as exc:
+            raise LLMError(f"bundled model: {exc}") from exc
+        return re.sub(r"<think>.*?</think>", "", text, flags=re.S), {}
     raise LLMError(f"unknown llm provider {provider!r}")
 
 
@@ -184,8 +192,9 @@ def ask(scan: dict, question: str, cfg: dict) -> tuple[str, dict]:
     events, refs = cite_catalog(scan)
     context = {
         "stats": scan.get("stats"), "analysis": {k: v for k, v in scan.get("analysis", {}).items() if k != "_meta"},
-        "findings": [{k: f[k] for k in ("key", "host", "source", "program", "event_id", "severity", "count",
-                                        "first", "last", "samples", "rule")} for f in scan.get("findings", [])[:25]],
+        "findings": [{**{k: f[k] for k in ("key", "host", "source", "program", "event_id", "severity", "count", "first", "last")},
+                      "samples": [x[:300] for x in f.get("samples", [])[:2]],
+                      "rule": (f.get("rule") or {}).get("title")} for f in scan.get("findings", [])[:25]],
         "tools": [{k: t.get(k) for k in ("name", "category", "what", "count", "first", "last", "hosts")} for t in scan.get("tools", [])[:15]],
         "indicators": [{k: i.get(k) for k in ("type", "value", "scope", "count")} for i in scan.get("iocs", [])[:40]],
         "citable_events": events,
@@ -195,7 +204,13 @@ def ask(scan: dict, question: str, cfg: dict) -> tuple[str, dict]:
     c = {**cfg, "max_tokens": 1200}
     if cfg.get("summary_model"):
         c["model"] = cfg["summary_model"]
-    prompt = "Scan data:\n" + json.dumps(context, indent=1, default=str)[:60000] + "\n\nQuestion: " + question
+    # ~24k characters (~7k tokens) keeps a 4B model on an 8 GB GPU; the citable events go first so they survive
+    body = json.dumps(context, separators=(",", ":"), default=str)
+    if len(body) > 24000:
+        context["indicators"] = context["indicators"][:15]
+        context["findings"] = context["findings"][:12]
+        body = json.dumps(context, separators=(",", ":"), default=str)[:24000]
+    prompt = "Scan data:\n" + body + "\n\nQuestion: " + question
     text, _ = chat(ASK_PROMPT, prompt, c)
     text = re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
     used = {m for m in cited_ids(text) if m in refs}

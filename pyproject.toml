@@ -1,12 +1,41 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
-name = "logagent"
-version = "0.1.0"
+name = "logingestllm"
+version = "0.2.0"
 description = "Local-only log analyzer and analyst co-pilot that runs on your own LLM"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.11"
-dependencies = []
+authors = [{ name = "the LogIngestLLM authors" }]
+keywords = ["logs", "siem", "soc", "security", "threat-hunting", "llm", "evtx", "mitre-attack", "sigma"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Security",
+    "Topic :: System :: Logging",
+    "Intended Audience :: Information Technology",
+]
+dependencies = []  # the analyzer is standard library only
+
+[project.optional-dependencies]
+# training / serving your own model (see README "Training your own model"); needs an NVIDIA GPU
+train = ["torch", "transformers>=4.50", "peft", "accelerate", "bitsandbytes"]
+
+[project.urls]
+Source = "https://github.com/<owner>/LogIngestLLM"
 
 [project.scripts]
 logagent = "logagent.cli:main"
 
+[tool.setuptools]
+packages = ["logagent", "logagent.collectors", "logagent.train"]
+
 [tool.setuptools.package-data]
 logagent = ["static/*.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

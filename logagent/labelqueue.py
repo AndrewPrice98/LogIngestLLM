@@ -11,7 +11,7 @@ from . import feedback, knowledge
 from .train.dataset import weak_label
 
 LEVELS = ["critical", "high", "medium", "low", "noise"]
-ROOT = Path(__file__).resolve().parents[1]
+from .paths import REPO as ROOT
 
 
 def _gap(a: str | None, b: str | None) -> int:

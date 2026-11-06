@@ -1,5 +1,6 @@
 import gzip
 import json
+import os
 import tomllib
 from datetime import datetime, timedelta, timezone
 
@@ -101,7 +102,7 @@ def test_detect_format_and_folder(tmp_path):
     assert detect_format(str(tmp_path / "j.json")) == "journal"
     assert detect_format(str(tmp_path / "wtmp.log")) == "binary"
     assert detect_format(str(tmp_path / "old.log.gz")) == "syslog"
-    names = sorted(p.rsplit("/", 1)[-1] for p in _files(str(tmp_path)))
+    names = sorted(os.path.basename(p) for p in _files(str(tmp_path)))
     assert names == ["app.log", "error.log", "j.json", "messages", "old.log.gz", "wtmp.log"]
     warns = []
     evs = list(collect({"type": "files", "path": str(tmp_path)}, parse_window("all"), warn=warns.append))
@@ -170,3 +171,12 @@ def test_ssh_sources_are_refused_with_a_clear_message():
     from logagent.collectors.sources import SourceError
     with pytest.raises(SourceError, match="Copy the logs here"):
         list(collect({"type": "ssh", "host": "pi@h"}, parse_window("24h")))
+
+
+def test_scans_in_the_same_second_do_not_overwrite(tmp_path):
+    from logagent import engine
+    cfg = engine.load_config(None)
+    cfg["data_dir"] = str(tmp_path)
+    ids = {engine.run_scan(cfg, [{"name": "b", "type": "files", "path": "samples/benign-laptop.log"}], "all", False,
+                           lambda m: None)["id"] for _ in range(3)}
+    assert len(ids) == 3 and all(engine.load_scan(cfg, i) for i in ids)

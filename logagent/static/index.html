@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>logagent console</title>
+<title>LogIngestLLM</title>
 <style>
 :root{
   --mono:"Cascadia Mono","JetBrains Mono",ui-monospace,SFMono-Regular,Consolas,monospace;
@@ -164,6 +164,9 @@ mark{background:var(--med);color:#111}
 .cite{background:var(--accent2);color:var(--text);border:0;border-radius:2px;padding:0 4px;margin:0 1px;font:600 10.5px var(--mono);cursor:pointer;vertical-align:1px}
 .cite:hover{background:var(--accent);color:#031015}
 .sugg{display:flex;flex-wrap:wrap;margin:4px 0 8px}
+.wgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;padding:16px 18px}
+.wcard{border:1px solid var(--line2);background:var(--panel);padding:14px 16px;display:flex;flex-direction:column;gap:4px}
+.wcard b{font:600 14px var(--sans)}.wcard .btn{align-self:flex-start;margin-top:auto}
 /* ---------- label queue */
 .qbar{height:4px;background:var(--line);margin-top:8px}.qbar span{display:block;height:100%;background:var(--ok)}
 .qcard{border:1px solid var(--line2);background:var(--panel)}
@@ -201,12 +204,12 @@ tr.dis td{color:var(--dim)}
 </head>
 <body>
 <div class="bar" id="bar">
-  <div class="brand">LOGAGENT</div>
+  <div class="brand">LOGINGESTLLM</div>
   <div>model <span class="dot" id="mDot"></span><b id="mName">…</b><span id="mDetail"></span></div>
   <div>privilege <b id="adm">…</b></div>
   <div>schedule <b id="sch">…</b></div>
   <div class="grow"></div>
-  <div><button id="qBtn" title="Label patterns fast (keys: j k u n 1-4 z)">LABEL QUEUE</button><button id="refBtn" title="What common log events mean (Windows IDs, Linux messages, ATT&CK)">REFERENCE</button><button id="tz" title="Toggle UTC / local time">UTC</button><button id="theme" title="Toggle theme">◐</button></div>
+  <div><button id="quitBtn" title="Stop the dashboard and the built-in model">QUIT</button><button id="mBtn" title="Your model's versions and scores">MODELS</button><button id="qBtn" title="Label patterns fast (keys: j k u n 1-4 z)">LABEL QUEUE</button><button id="refBtn" title="What common log events mean (Windows IDs, Linux messages, ATT&CK)">REFERENCE</button><button id="tz" title="Toggle UTC / local time">UTC</button><button id="theme" title="Toggle theme">◐</button></div>
 </div>
 <div class="wrap">
   <aside>
@@ -230,7 +233,7 @@ tr.dis td{color:var(--dim)}
       <div id="history"><div class="empty">no scans</div></div>
     </div>
   </aside>
-  <main id="main"><div class="empty">Select sources and run a scan.</div></main>
+  <main id="main"><div class="empty">loading…</div></main>
 </div>
 <script>
 const $ = s => document.querySelector(s);
@@ -348,7 +351,8 @@ async function loadHistory(openLatest) {
   if (location.hash === '#locations') { if (view !== 'locations') openLocations(); return; }
   if (location.hash === '#reference') { view = 'reference'; renderReference(); return; }
   if (location.hash === '#queue') { if (view !== 'queue') openQueue(); return; }
-  if (!scans.length) return;
+  if (location.hash === '#models') { if (view !== 'models') openModels(); return; }
+  if (!scans.length) { if (view === 'scan' && !current) render(); return; }
   const want = location.hash.slice(1) || (openLatest && scans[0].id);
   if (want && (!current || current.id !== want)) await openScan(want);
 }
@@ -403,7 +407,8 @@ function render() {
   if (view === 'reference') return renderReference();
   if (view === 'queue') return renderQueue();
   if (view === 'log') return renderLog();
-  if (!current) { $('#main').replaceChildren(el('div', {class: 'empty'}, 'Select sources and run a scan, or open log locations to pick files.')); return; }
+  if (view === 'models') return renderModels();
+  if (!current) return renderWelcome();
   const s = current, a = s.analysis || {}, st = s.stats || {}, meta = a._meta || {};
   const m = $('#main'); m.replaceChildren();
   const all = rows();
@@ -419,6 +424,8 @@ function render() {
       el('span', {}, 'reviewed by ', el('b', {}, reviewer)),
       el('span', {}, 'hosts ', el('b', {}, (st.hosts || []).join(', ') || '—')),
       s.label ? el('span', {}, 'logs ', el('b', {}, s.label)) : null,
+      el('span', {}, 'report ', el('a', {href: `/api/report?scan=${encodeURIComponent(s.id)}&format=md`}, 'markdown'), ' · ',
+        el('a', {href: `/api/report?scan=${encodeURIComponent(s.id)}&format=html`, target: '_blank', rel: 'noopener'}, 'printable / PDF')),
       st.os ? el('span', {}, 'origin os ', el('b', {}, st.os.origin + (st.os.origin_detail ? ' / ' + st.os.origin_detail : ''))) : null)));
   if (s.summary) {
     const o = s.summary.origin || {};
@@ -443,7 +450,7 @@ function render() {
 
   const tabs = el('div', {class: 'tabs'});
   const nTech = new Set([...(s.findings || []), ...(s.others || [])].flatMap(c => c.attack || [])).size;
-  for (const [k, t] of [['findings', `Findings [${all.length}]`], ['tools', `Tools [${(s.tools || []).length}]`], ['attack', `ATT&CK [${nTech}]`], ['iocs', `Indicators [${(s.iocs || []).length}]`],
+  for (const [k, t] of [['findings', `Findings [${all.length}]`], ['timeline', 'Timeline'], ['tools', `Tools [${(s.tools || []).length}]`], ['attack', `ATT&CK [${nTech}]`], ['iocs', `Indicators [${(s.iocs || []).length}]`],
                         ['sources', 'Sources'], ['query', 'Query model']])
     tabs.append(el('button', {class: tab === k ? 'on' : '', on: {click: () => { tab = k; store.set('tab', k); render(); }}}, t));
   m.append(tabs);
@@ -451,6 +458,7 @@ function render() {
   if (tab === 'findings') renderFindings(m, all);
   else if (tab === 'attack') renderAttack(m);
   else if (tab === 'tools') renderTools(m);
+  else if (tab === 'timeline') renderTimeline(m);
   else if (tab === 'iocs') renderIocs(m);
   else if (tab === 'sources') renderSources(m);
   else renderQuery(m);
@@ -1051,6 +1059,117 @@ function suggestions(s) {
   return out.slice(0, 6);
 }
 
+// ---------- timeline across every log in the scan
+let tlLevels = new Set(['critical', 'high', 'medium']), tlKinds = new Set(['finding', 'tool', 'indicator']), tlHost = '';
+function timelineItems() {
+  const items = [];
+  for (const r of allPatterns()) {
+    const c = r.raws[0];
+    items.push({t: r.first, imp: r.imp, kind: 'finding', what: r.title, host: r.host,
+      detail: r.count > 1 ? `${r.count}x until ${ts(r.last)}` : r.raws[0].samples[0].slice(0, 160),
+      ref: c.first_loc ? `c/${c.key}/-1` : null, attack: attackOf(r)});
+  }
+  (current.tools || []).forEach((t, i) => {
+    const imp = CAT_SEV[t.category]; if (!imp) return;
+    t.uses.forEach((u, j) => items.push({t: u.ts, imp, kind: 'tool', what: t.name, host: u.host, detail: u.evidence.slice(0, 200),
+      ref: u.loc ? `t/${i}/${j}` : null, attack: t.attack || []}));
+  });
+  (current.iocs || []).forEach((x, i) => {
+    if (!(x.type === 'ip' && (x.scope === 'public' || x.scope === 'reserved')) && x.type !== 'url') return;
+    items.push({t: x.first, imp: 'low', kind: 'indicator', what: `first seen: ${x.type} ${x.value}`, host: x.hosts[0] || '',
+      detail: `${x.count} event(s) in ${x.keys.length} pattern(s)`, ref: x.loc ? `i/${i}` : null, attack: []});
+  });
+  return items.sort((a, b) => new Date(a.t) - new Date(b.t));
+}
+function renderTimeline(m) {
+  const all = timelineItems();
+  const hosts = [...new Set(all.map(x => x.host))].sort();
+  const list = all.filter(x => (tlLevels.has(x.imp) || (x.kind === 'indicator' && tlKinds.has('indicator'))) && tlKinds.has(x.kind) && (!tlHost || x.host === tlHost));
+  m.append(el('div', {class: 'tools'},
+    ...LV.map(l => el('button', {class: `chip ${l} ${tlLevels.has(l) ? 'on' : ''}`, on: {click: () => { tlLevels.has(l) ? tlLevels.delete(l) : tlLevels.add(l); render(); }}}, l)),
+    ...['finding', 'tool', 'indicator'].map(k => el('label', {class: 'chk', style: 'margin:0'}, el('input', {type: 'checkbox', checked: tlKinds.has(k),
+      on: {change: e => { e.target.checked ? tlKinds.add(k) : tlKinds.delete(k); render(); }}}), k + 's')),
+    el('select', {style: 'width:auto', on: {change: e => { tlHost = e.target.value; render(); }}}, el('option', {value: ''}, 'all hosts'),
+      ...hosts.map(h => el('option', {value: h, selected: h === tlHost}, h))),
+    el('span', {style: 'flex:1'}), el('span', {class: 'lbl'}, `${list.length} of ${all.length} entries, oldest first, across ${(current.sources || []).length} log source(s)`)));
+  if (!list.length) { m.append(el('div', {class: 'empty'}, 'nothing matches the filter')); return; }
+  const t = el('table', {}, el('tr', {}, ...['time', 'sev', 'kind', 'what', 'host', 'detail', ''].map(h => el('th', {}, h))));
+  let day = '';
+  for (const x of list) {
+    const d = ts(x.t).slice(0, 10);
+    if (d !== day) { day = d; t.append(el('tr', {}, el('td', {colspan: 7, class: 'lbl', style: 'background:var(--bg2);padding-top:8px'}, d))); }
+    t.append(el('tr', {class: 'r'},
+      el('td', {class: 'ts'}, ts(x.t).slice(11)), el('td', {}, el('span', {class: 'sev ' + x.imp}, x.imp)),
+      el('td', {}, el('span', {class: 'tag'}, x.kind)), el('td', {class: 'title'}, x.what, ...x.attack.map(a => attackChip(a))),
+      el('td', {}, x.host), el('td', {class: 'msg'}, x.detail),
+      el('td', {class: 'act'}, x.ref ? logBtn(current.id, x.ref) : null)));
+  }
+  m.append(t);
+}
+
+// ---------- models: versions, which is active, scores, promotion decisions
+let MODELS = null;
+async function openModels() {
+  view = 'models'; history.replaceState(null, '', '#models');
+  document.querySelectorAll('.hist a').forEach(a => a.classList.remove('active'));
+  $('#main').replaceChildren(el('div', {class: 'empty'}, 'loading…'));
+  MODELS = await api('/api/models'); renderModels();
+}
+function renderModels() {
+  const m = $('#main'); m.replaceChildren();
+  const d = MODELS || {};
+  const pct = x => x == null ? '—' : (x * 100).toFixed(1) + '%';
+  m.append(el('div', {class: 'head'}, el('p', {class: 'headline'}, 'Models'),
+    el('p', {class: 'summary'}, 'Every version of your model, scored on held-out examples and on the known-answer co-pilot evaluation. A new version only becomes active when trainer/promote.py finds it better.'),
+    el('div', {class: 'meta'}, el('span', {}, 'active ', el('b', {}, d.active || 'none')), el('span', {}, 'versions ', el('b', {}, (d.versions || []).length)))));
+  if (d.error) { m.append(el('div', {class: 'empty'}, d.error)); return; }
+  const head = ['version', 'trained on', 'train time', 'held-out exact', 'within one level', 'flag precision', 'flag recall', 'co-pilot checks', ''];
+  const t = el('table', {}, el('tr', {}, ...head.map(h => el('th', {style: 'top:0'}, h))));
+  for (const v of d.versions || []) {
+    const h = v.heldout || {}, c = v.copilot;
+    t.append(el('tr', {class: v.active ? 'r open' : 'r'},
+      el('td', {class: 'title'}, v.name, v.active ? el('span', {class: 'new'}, 'ACTIVE') : null),
+      el('td', {class: 'n'}, v.train.examples ? `${v.train.examples} ex · ${v.train.steps} steps` : '—'),
+      el('td', {class: 'n'}, v.train.minutes ? v.train.minutes + ' min' : '—'),
+      el('td', {class: 'n'}, pct(h.exact)), el('td', {class: 'n'}, pct(h.within_one_level)),
+      el('td', {class: 'n'}, pct(h.flag_precision)), el('td', {class: 'n'}, pct(h.flag_recall)),
+      el('td', {class: 'n', title: c ? (c.failed.join('\n') || 'all passed') : 'run: python -m logagent eval --model'}, c ? `${c.passed}/${c.total}` : '—'),
+      el('td', {class: 'lbl'}, c?.failed?.length ? `${c.failed.length} failed (hover)` : '')));
+  }
+  if (d.base) t.append(el('tr', {class: 'r'}, el('td', {class: 'title'}, 'base model (no fine-tune)'), el('td', {}, '—'), el('td', {}, '—'),
+    el('td', {class: 'n'}, pct(d.base.exact)), el('td', {class: 'n'}, pct(d.base.within_one_level)),
+    el('td', {class: 'n'}, pct(d.base.flag_precision)), el('td', {class: 'n'}, pct(d.base.flag_recall)), el('td', {}, '—'), el('td', {})));
+  m.append(el('div', {class: 'pad'}, el('div', {class: 'h'}, el('span', {}, 'versions')), t));
+  if ((d.promotions || []).length) m.append(el('div', {class: 'pad'}, el('div', {class: 'h'}, el('span', {}, 'promotion decisions')),
+    el('table', {}, el('tr', {}, ...['when', 'candidate', 'quality', 'vs current', 'decided on', 'result'].map(h => el('th', {style: 'top:0'}, h))),
+      ...d.promotions.map(p => el('tr', {}, el('td', {class: 'ts'}, p.created), el('td', {}, (p.candidate || '').split('/')[1] || p.candidate),
+        el('td', {class: 'n'}, p.candidate_quality), el('td', {class: 'n'}, p.current_quality), el('td', {}, p.decided_on === 'you' ? 'your labels' : 'all held-out'),
+        el('td', {}, el('span', {class: 'sev ' + (p.promoted ? 'low' : 'noise'), style: 'width:auto;padding:1px 6px'}, p.promoted ? 'promoted' : 'kept current')))))));
+  const unix = sys.os !== 'Windows', py = unix ? '.venv-train/bin/python' : '.venv-train\\Scripts\\python';
+  const steps = [['build data', `${unix ? 'python3' : 'python'} -m logagent dataset`], ['train', `${py} trainer/train.py`],
+    ['gate', `${py} trainer/promote.py`], ['check the co-pilot', `${unix ? 'python3' : 'python'} -m logagent eval --model`]];
+  m.append(el('div', {class: 'pad'}, el('div', {class: 'h'}, el('span', {}, 'retrain')),
+    ...steps.map(([l, c]) => el('div', {class: 'cmd'}, el('div', {class: 'lbl'}, l), el('div', {class: 'cmdrow'}, el('code', {}, c),
+      el('button', {class: 'mini', on: {click: e => navigator.clipboard?.writeText(c).then(() => { e.target.textContent = 'copied'; })}}, 'copy'))))));
+}
+
+
+// ---------- first run
+async function renderWelcome() {
+  const m = $('#main'); m.replaceChildren();
+  m.append(el('div', {class: 'head'}, el('p', {class: 'headline'}, 'LogIngestLLM'),
+    el('p', {class: 'summary'}, 'A local-only log analyzer and analyst co-pilot. Point it at logs on this machine, or start with an example investigation. Nothing leaves your computer.')));
+  const card = (title, text, btn, fn) => el('div', {class: 'wcard'}, el('b', {}, title), el('p', {class: 'lbl'}, text), el('button', {class: 'btn', on: {click: fn}}, btn));
+  m.append(el('div', {class: 'wgrid'},
+    card('Logs on this machine', `Find the journal, log folders and Event Log channels on ${sys.pretty || 'this OS'}.`, 'DISCOVER', () => { locTab = 'discover'; openLocations(); }),
+    card('A file you have', 'A .log, .evtx, .xml export, access log or a whole folder.', 'OPEN A FILE', () => { locTab = 'add'; openLocations(); }),
+    card('Run a scan', 'Scan the sources ticked on the left, with your model reviewing the findings.', 'RUN SCAN', () => $('#scanBtn').click())));
+  const samples = await api('/api/samples');
+  if (Array.isArray(samples) && samples.length) m.append(el('div', {class: 'pad'}, el('div', {class: 'h'}, el('span', {}, 'or analyze an example investigation')),
+    ...samples.map(x => el('div', {class: 'use', style: 'grid-template-columns:auto 1fr'},
+      el('button', {class: 'mini', on: {click: () => analyzePicked({type: 'files', name: x.file, ...(x.host ? {host: x.host} : {})}, 'files', [x.path], 'all', $('#useLlm').checked, true)}}, 'analyze'),
+      el('span', {}, x.label, el('span', {class: 'lbl'}, '  ' + x.file))))));
+}
 // ---------- log locations: configure, discover, browse, pick files to analyze
 const TYPE_INFO = {files: 'folder, glob or file; format detected per file', journald: 'systemd journal on this machine',
   syslog: 'syslog-format text files', app: 'your application logs (text or JSON lines)', windows: 'live Windows Event Log channels',
@@ -1154,6 +1273,7 @@ function sourceForm(f, onSave, onCancel) {
     el('div', {class: 'hint'}, TYPE_INFO[f.type] || '')];
   if (['files', 'syslog', 'app', 'evtx'].includes(f.type)) fields.push(el('label', {}, 'path'), bind('path', {placeholder: PATH_HINT[sys.os] || '/path/to/logs'}),
     el('div', {class: 'hint'}, 'a folder (reads log files up to two levels down), a glob, or one file; ~ and env vars work'));
+  if (['files', 'syslog', 'app'].includes(f.type)) fields.push(el('label', {}, 'host'), bind('host', {placeholder: 'optional: the machine these logs came from (default: this one)'}));
   if (f.type === 'files') fields.push(el('label', {}, 'format'), el('select', {on: {change: e => { f.format = e.target.value; }}},
     ...['auto', 'syslog', 'journal', 'app', 'evtx'].map(o => el('option', {value: o, selected: (f.format || 'auto') === o}, o))));
   if (f.type === 'app') fields.push(el('label', {}, 'app name'), bind('app', {placeholder: 'optional, defaults to the file name'}));
@@ -1255,7 +1375,8 @@ async function analyzePicked(spec, kind, picks, window, useLlm, summarize) {
     specs = picks.map(path => {
       const name = uniqueName(baseName(path), taken); taken.push(name);
       const t = ['syslog', 'app', 'evtx'].includes(spec.type) ? spec.type : 'files';
-      return {name, type: t, path, ...(t === 'files' && spec.format ? {format: spec.format} : {}), ...(t === 'app' && spec.app ? {app: spec.app} : {})};
+      return {name, type: t, path, ...(t === 'files' && spec.format ? {format: spec.format} : {}), ...(t === 'app' && spec.app ? {app: spec.app} : {}),
+        ...(spec.host ? {host: spec.host} : {})};
     });
     label = picks.slice(0, 3).map(baseName).join(', ') + (picks.length > 3 ? ` +${picks.length - 3} more` : '');
   } else if (kind === 'units') {
@@ -1342,6 +1463,13 @@ $('#scanBtn').addEventListener('click', async () => {
 });
 $('#locBtn').addEventListener('click', () => openLocations());
 $('#qBtn').addEventListener('click', () => openQueue());
+$('#mBtn').addEventListener('click', () => openModels());
+let quitArmed = false;
+$('#quitBtn').addEventListener('click', async () => {
+  if (!quitArmed) { quitArmed = true; $('#quitBtn').textContent = 'CLICK AGAIN TO QUIT'; setTimeout(() => { quitArmed = false; $('#quitBtn').textContent = 'QUIT'; }, 4000); return; }
+  await api('/api/quit', {});
+  document.body.replaceChildren(el('div', {class: 'empty', style: 'padding-top:120px'}, 'LogIngestLLM has stopped. You can close this tab.'));
+});
 $('#refBtn').addEventListener('click', () => { view = 'reference'; history.replaceState(null, '', '#reference'); renderReference(); });
 $('#tz').addEventListener('click', () => { utc = !utc; store.set('tz', utc ? 'utc' : 'local'); $('#tz').textContent = utc ? 'UTC' : 'LOCAL'; if (current) render(); loadHistory(); status(); });
 $('#theme').addEventListener('click', () => { const t = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = t; store.set('theme', t); });

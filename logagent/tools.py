@@ -221,8 +221,10 @@ def boost(clusters, col: "Collector") -> None:
     for c in clusters:
         if c.key in best:
             bonus, name = best[c.key]
-            c.score += bonus
-            c.reasons.append(f"tool: {name} (+{bonus})")
+            # a rule describing the same behaviour already scored it: the tool only adds what it exceeds that by
+            add = max(0, bonus - (c.rule.score if c.rule else 0))
+            c.score += add
+            c.reasons.append(f"tool: {name} (+{add})")
 
 
 TOOLS_PROMPT = """You identify the tools and programs used in a log, for a security review. You get the distinct \

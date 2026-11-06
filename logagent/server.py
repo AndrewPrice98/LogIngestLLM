@@ -14,7 +14,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import __version__, engine, explain, feedback, knowledge, labelqueue, llm, locations, logview
+from . import __version__, engine, explain, feedback, knowledge, labelqueue, llm, locations, logview, report
 from .collectors.sources import parse_window
 
 STATIC = Path(__file__).parent / "static"
@@ -46,6 +46,9 @@ _model_cache: dict = {"t": 0.0, "v": None}
 def model_status(llm_cfg: dict) -> dict:
     """Is the configured model reachable? Cached for 10 s."""
     prov = (llm_cfg.get("provider") or "none").lower()
+    if prov == "bundled":
+        from . import bundled
+        return bundled.ENGINE.status()
     if prov in ("none", "anthropic"):
         return {"state": "off" if prov == "none" else "remote", "detail": prov}
     if time.time() - _model_cache["t"] < 10 and _model_cache["v"]:
@@ -65,6 +68,34 @@ def model_status(llm_cfg: dict) -> dict:
 
 def src_name(s: dict) -> str:
     return s.get("name") or s.get("type")
+
+
+def _models_overview() -> dict:
+    """Trained versions, which one is active, held-out scores, co-pilot eval results and promotion decisions."""
+    from . import evals
+    from .paths import models_dir
+    models = models_dir()
+    read = lambda p: json.loads(p.read_text(encoding="utf-8"))
+    active = evals.active_adapter()
+    copilot = {}
+    for p in sorted(models.glob("copilot-eval-model-*.json")):
+        r = read(p)
+        copilot[r.get("adapter") or "?"] = {"passed": r["passed"], "total": r["total"], "created": r["created"],
+                                           "failed": [f"{s['name']}: {c['check']}" for s in r["scenarios"]
+                                                      for c in s.get("checks", []) if not c["ok"]]}
+    versions = []
+    for d in sorted(models.glob("logagent-*"), reverse=True):
+        if not (d / "adapter").is_dir():
+            continue
+        ev = models / f"eval-{d.name}.json"
+        versions.append({"name": d.name, "active": d.name == active,
+                         "train": read(d / "train_info.json") if (d / "train_info.json").exists() else {},
+                         "heldout": read(ev)["report"].get("all") if ev.exists() else None,
+                         "copilot": copilot.get(d.name)})
+    base = models / "eval-base.json"
+    return {"active": active, "versions": versions, "base": read(base)["report"].get("all") if base.exists() else None,
+            "promotions": [{k: v for k, v in read(p).items() if not k.endswith("_report")}
+                           for p in sorted(models.glob("promote-*.json"), reverse=True)][:20]}
 
 
 def make_handler(cfg: dict, job: Job, sched: dict):
@@ -166,6 +197,31 @@ def make_handler(cfg: dict, job: Job, sched: dict):
                     return self._send(200, logview.view(scan, str(g("ref", "")), int(g("before", 25)), int(g("after", 25)), g("at")))
                 except (logview.ViewError, ValueError) as exc:
                     return self._send(400, {"error": str(exc)})
+            if path == "/api/report":
+                qs = parse_qs(urlparse(self.path).query)
+                scan = engine.load_scan(cfg, (qs.get("scan") or [""])[0])
+                if not scan:
+                    return self._send(404, {"error": "unknown scan"})
+                md = report.markdown(scan)
+                fmt = (qs.get("format") or ["md"])[0]
+                body = report.to_html(md, f"LogIngestLLM report {scan['id']}") if fmt == "html" else md
+                data = body.encode("utf-8")
+                self.send_response(200)
+                self.send_header("content-type", "text/html; charset=utf-8" if fmt == "html" else "text/markdown; charset=utf-8")
+                if fmt != "html":
+                    self.send_header("content-disposition", f'attachment; filename="logagent-report-{scan["id"]}.md"')
+                self.send_header("content-length", str(len(data)))
+                self.send_header("x-content-type-options", "nosniff")
+                self.end_headers()
+                self.wfile.write(data)
+                return
+            if path == "/api/samples":
+                from .cli import DEMO
+                from .paths import resource
+                root = resource("samples")
+                return self._send(200, [{"file": f, "label": l, "path": str(root / f), "host": h} for f, l, h in DEMO if (root / f).exists()])
+            if path == "/api/models":
+                return self._send(200, _models_overview())
             if path == "/api/queue":
                 return self._send(200, labelqueue.build(cfg))
             if path == "/api/reference":
@@ -214,6 +270,10 @@ def make_handler(cfg: dict, job: Job, sched: dict):
                 return self._send(400, {"error": str(exc)})
             except OSError as exc:
                 return self._send(500, {"error": f"{type(exc).__name__}: {exc}"})
+            if path == "/api/quit":  # stop the dashboard (and the built-in model) from the browser
+                self._send(200, {"stopping": True})
+                threading.Thread(target=self.server.shutdown, daemon=True).start()
+                return
             if path == "/api/feedback":
                 sid, key = str(body.get("scan_id", "")), str(body.get("key", ""))
                 if not engine.load_scan(cfg, sid) or not key.isalnum():
@@ -276,11 +336,20 @@ def serve(cfg: dict, host: str = "127.0.0.1", port: int = 8765, open_browser: bo
     sched: dict = {"every": cfg.get("schedule") or None, "next": None}
     handler = make_handler(cfg, Job(), sched)
     httpd = ThreadingHTTPServer((host, port), handler)
+    if (cfg["llm"].get("provider") or "").lower() == "bundled":  # warm the built-in model while the page loads
+        from . import bundled
+
+        def warm():
+            try:
+                bundled.ENGINE.start()
+            except RuntimeError as exc:
+                print(f"[model] {exc}  (continuing with rules only)")
+        threading.Thread(target=warm, daemon=True).start()
     if cfg.get("schedule"):
         threading.Thread(target=_scheduler, args=(cfg, sched, handler.start_scan), daemon=True).start()
         print(f"automatic scans every {cfg['schedule']}")
     url = f"http://{'127.0.0.1' if host in ('0.0.0.0', '::') else host}:{port}/"
-    print(f"logagent dashboard on {url}  (Ctrl+C to stop)")
+    print(f"LogIngestLLM dashboard on {url}  (Ctrl+C to stop)")
     if open_browser:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
     try:

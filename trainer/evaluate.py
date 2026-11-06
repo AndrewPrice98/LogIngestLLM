@@ -30,34 +30,27 @@ def parse(text: str):
         return None
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--adapter", default=None, help="path, or 'none' for the base model (default: latest)")
-    ap.add_argument("--data", default=str(ROOT / "train_data" / "eval.jsonl"))
-    ap.add_argument("--n", type=int, default=150, help="examples to score (balanced by label)")
-    args = ap.parse_args()
-    adapter = None if args.adapter == "none" else (args.adapter or latest_adapter())
-    rows = read_jsonl(args.data)
-
-    # Balanced sample: every example you labeled, then an equal share of each importance level.
+def balanced_sample(rows: list[dict], n: int) -> list[dict]:
+    """Every example you labeled, then an equal share of each importance level (fixed seed: comparable runs)."""
     rnd = random.Random(1)
     yours = [r for r in rows if r["meta"]["src"] == "you"]
     by = defaultdict(list)
     for r in rows:
         if r["meta"]["src"] != "you":
             by[json.loads(r["messages"][2]["content"])["importance"]].append(r)
-    per = max(1, (args.n - len(yours)) // max(1, len(by)))
-    sample = yours + [x for lv in by.values() for x in rnd.sample(lv, min(per, len(lv)))]
+    per = max(1, (n - len(yours)) // max(1, len(by)))
+    return yours + [x for lv in sorted(by) for x in rnd.sample(by[lv], min(per, len(by[lv])))]
 
+
+def score(adapter, sample: list[dict], progress=print) -> dict:
     tok, model = load(adapter)
-    print(f"evaluating {'base model' if not adapter else adapter} on {len(sample)} examples")
+    progress(f"evaluating {'base model' if not adapter else adapter} on {len(sample)} examples")
     res = defaultdict(Counter)
     confusion = Counter()
     t0 = time.time()
     for i, r in enumerate(sample):
         gold = json.loads(r["messages"][2]["content"])["importance"]
-        pred_raw = generate(tok, model, r["messages"][:2], max_new_tokens=300)
-        pred = parse(pred_raw)
+        pred = parse(generate(tok, model, r["messages"][:2], max_new_tokens=300))
         p = str(pred.get("importance", "")).lower() if isinstance(pred, dict) else ""
         for group in ("all", r["meta"]["src"]):
             c = res[group]
@@ -71,8 +64,10 @@ def main():
             c["fn"] += g_flag and not p_flag
         confusion[(gold, p or "invalid")] += 1
         if (i + 1) % 25 == 0:
-            print(f"  {i + 1}/{len(sample)}  {(time.time() - t0) / (i + 1):.1f}s each", flush=True)
-
+            progress(f"  {i + 1}/{len(sample)}  {(time.time() - t0) / (i + 1):.1f}s each")
+    del model
+    import torch
+    torch.cuda.empty_cache()
     report = {}
     for g, c in res.items():
         prec = c["tp"] / max(1, c["tp"] + c["fp"])
@@ -81,6 +76,17 @@ def main():
                      "within_one_level": round(c["within1"] / c["n"], 3), "flag_precision": round(prec, 3),
                      "flag_recall": round(rec, 3)}
     report["confusion(gold->pred)"] = {f"{a}->{b}": n for (a, b), n in sorted(confusion.items())}
+    return report
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--adapter", default=None, help="path, or 'none' for the base model (default: active/latest)")
+    ap.add_argument("--data", default=str(ROOT / "train_data" / "eval.jsonl"))
+    ap.add_argument("--n", type=int, default=150, help="examples to score (balanced by label)")
+    args = ap.parse_args()
+    adapter = None if args.adapter == "none" else (args.adapter or latest_adapter())
+    report = score(adapter, balanced_sample(read_jsonl(args.data), args.n), lambda m: print(m, flush=True))
     print(json.dumps(report, indent=1))
     name = "base" if not adapter else str(adapter).replace("\\", "/").split("/")[-2]
     out = ROOT / "models" / f"eval-{name}.json"

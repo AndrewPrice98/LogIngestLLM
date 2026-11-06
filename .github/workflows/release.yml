@@ -1,0 +1,70 @@
+name: release
+
+# Push a tag like v0.2.0 to build the downloadable app for Windows, macOS and Linux and attach it to a GitHub Release.
+# The model files (.gguf parts) are produced locally with trainer/export.py --bundle and uploaded to the same release.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      llama_tag:
+        description: "llama.cpp release to bundle (e.g. b6050); empty = latest"
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest   # x64
+          - os: macos-14         # Apple Silicon
+          - os: macos-13         # Intel
+          - os: ubuntu-22.04     # x64; older glibc so it runs on more distributions
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test before packaging
+        run: |
+          python -m pip install pytest pyinstaller
+          python -m pytest -q
+      - name: Build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python packaging/build.py --llama-tag "${{ inputs.llama_tag || 'latest' }}"
+      - name: Smoke test the packaged app
+        shell: bash
+        run: |
+          app=dist/LogIngestLLM/LogIngestLLM
+          [ -f "$app.exe" ] && app="$app.exe"
+          "$app" eval   # known-answer checks from inside the bundle (rules, tools, indicators)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-${{ matrix.os }}
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "LogIngestLLM $GITHUB_REF_NAME" \
+              --notes "Download the build for your OS and the model files (logingestllm-*.gguf.part*, *.lora.gguf, SHA256SUMS); put the model files in the app's model/ folder. See README-FIRST.txt inside the download."
+          gh release upload "$GITHUB_REF_NAME" out/* --repo "$GITHUB_REPOSITORY" --clobber

@@ -1,0 +1,108 @@
+{
+  "_doc": "Known-answer scenarios. 'expect' is checked on every test run (rules, tools, indicators, ATT&CK: deterministic). 'model' is checked by `python -m logagent eval --model` against the running model. Paths are relative to the repo; a scenario with 'files_env' reads its files from the folder in that environment variable and is skipped if it isn't set.",
+  "forbidden": [
+    "systemctl\\s+(stop|disable|mask)\\s+(ssh|sshd|networking|NetworkManager|firewalld)",
+    "ufw\\s+disable", "iptables\\s+-F", "ssh\\s+pi@", "rm\\s+-rf\\s+/(\\s|$)"
+  ],
+  "scenarios": [
+    {
+      "name": "linux-intrusion",
+      "about": "SSH guessing, then a login, LinPEAS, curl|sh, a backdoor user, a reverse shell and a cron miner",
+      "files": ["samples/intrusion-auth.log"],
+      "expect": {
+        "rules": ["lx_new_user", "lx_ssh_accepted"],
+        "tools": ["LinPEAS / WinPEAS / LinEnum", "Reverse shell", "Crypto miner", "Download and run (curl/wget | sh)"],
+        "iocs": [["ip", "203.0.113.50"], ["ip", "198.51.100.23"], ["user", "backup2"]],
+        "attack": ["T1136.001", "T1021.004"],
+        "finding_with_tool": ["Reverse shell", "Crypto miner"]
+      },
+      "model": {
+        "min_importance": {"lx_new_user": "medium"},
+        "tool_min_importance": {"Reverse shell": "high", "Crypto miner": "high"},
+        "summary_all": [["reverse shell", "/dev/tcp", "4444"], ["backup2"], ["203.0.113.50"]],
+        "ask": {"q": "What happened, step by step? Cite the events.", "min_cites": 3, "all": [["backup2"], ["203.0.113.50"]]}
+      }
+    },
+    {
+      "name": "windows-intrusion",
+      "about": "Password guessing, certutil download, encoded PowerShell, LSASS dump, new admin, PsExec, shadow copies deleted, log cleared",
+      "files": ["samples/windows-security.xml"],
+      "expect": {
+        "rules": ["win_audit_cleared", "win_user_created", "win_admin_group_add", "win_failed_logon_burst", "win_service_installed"],
+        "top_rule": "win_audit_cleared",
+        "tools": ["LSASS dump via comsvcs.dll", "certutil download/decode", "Encoded / download PowerShell",
+                  "Shadow copy deletion", "Event log clearing", "PsExec", "net user / localgroup add"],
+        "iocs": [["ip", "198.51.100.23"], ["ip", "203.0.113.50"], ["user", "svc_backup"]],
+        "attack": ["T1070.001", "T1110", "T1136.001", "T1098", "T1543.003"],
+        "finding_with_tool": ["LSASS dump via comsvcs.dll", "certutil download/decode"]
+      },
+      "model": {
+        "min_importance": {"win_audit_cleared": "high", "win_admin_group_add": "high"},
+        "tool_min_importance": {"LSASS dump via comsvcs.dll": "high"},
+        "summary_all": [["lsass", "comsvcs", "credential"], ["svc_backup"], ["clear"]],
+        "ask": {"q": "What happened, step by step? Cite the events.", "min_cites": 3, "all": [["svc_backup"], ["lsass", "comsvcs"]]}
+      }
+    },
+    {
+      "name": "web-scanners",
+      "about": "Nikto, gobuster and sqlmap against a web server, then a payload download",
+      "files": ["samples/web-access.log"],
+      "expect": {
+        "tools": ["sqlmap", "Nikto / Nuclei / WPScan", "Gobuster / ffuf / dirb"],
+        "iocs": [["ip", "198.51.100.23"]],
+        "finding_with_tool": ["sqlmap"]
+      },
+      "model": {
+        "tool_min_importance": {"sqlmap": "medium"},
+        "summary_all": [["sqlmap", "sql injection"], ["198.51.100.23"]]
+      }
+    },
+    {
+      "name": "device-health",
+      "about": "A small Linux box with a failing SD card, under-voltage, OOM and a crash-looping service",
+      "files": ["samples/pi-syslog.log"],
+      "expect": {
+        "rules": ["pi_undervoltage", "lx_io_error", "lx_fs_error", "lx_ssh_bruteforce", "lx_oom", "lx_restart_loop"],
+        "top_rule_in": ["lx_io_error", "lx_fs_error"],
+        "no_tools": true
+      },
+      "model": {
+        "min_importance": {"lx_io_error": "high", "lx_fs_error": "high"},
+        "summary_all": [["sd card", "i/o error", "storage", "mmcblk0"], ["voltage", "power"]]
+      }
+    },
+    {
+      "name": "benign-laptop",
+      "about": "A healthy machine: boot, DHCP, cron, updates, the owner's own SSH login, a USB mouse",
+      "files": ["samples/benign-laptop.log"],
+      "expect": {
+        "max_rule_score": 40,
+        "no_tools": true,
+        "no_attack": true
+      },
+      "model": {
+        "max_importance": "medium",
+        "summary_none": ["compromise", "attacker", "malicious", "brute.?force"]
+      }
+    },
+    {
+      "name": "campfire-1-kerberoasting",
+      "about": "HTB Sherlock Campfire-1: Kerberoasting from a workstation after PowerView (bring your own copy)",
+      "files_env": "LOGAGENT_EVAL_CAMPFIRE1",
+      "files": ["Domain Controller/SECURITY-DC.evtx", "Workstation/Powershell-Operational.evtx"],
+      "expect": {
+        "rules": ["win_kerberoast"],
+        "top_rule": "win_kerberoast",
+        "tools": ["PowerSploit / PowerView"],
+        "iocs": [["ip", "172.17.79.129"]],
+        "attack": ["T1558.003"]
+      },
+      "model": {
+        "min_importance": {"win_kerberoast": "high"},
+        "summary_all": [["kerberoast", "rc4", "0x17"], ["mssqlservice"], ["alonzo"]],
+        "ask": {"q": "Was there Kerberoasting? Which account, which service, from where? Cite the events.", "min_cites": 1,
+                "all": [["mssqlservice"], ["172.17.79.129"]]}
+      }
+    }
+  ]
+}

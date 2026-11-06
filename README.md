@@ -1,132 +1,194 @@
-# Log Agent
+# LogIngestLLM
 
-Reads your logs, throws away the noise, and tells you the handful of things worth your attention, with why they matter and what to do.
+**A local-only log analyzer and analyst co-pilot that runs on a model you fine-tune yourself.**
 
-A **local-only log analyzer and analyst co-pilot**. Sources: **Windows Event Log**, **Linux syslog / journald**, **your own app logs** (text or JSON lines, stack traces grouped), **web server access logs**, and any log file or folder on this machine. Logs from other machines are analyzed by copying or exporting them here and opening them; exported Windows `.evtx` files are read on Linux and macOS too (built-in reader, no Windows tools needed). Nothing leaves your computer.
+It reads Windows Event Logs (including exported `.evtx`, on any OS), Linux journald/syslog, web server and application
+logs, finds the handful of events worth your attention, explains them for people learning to read logs, and gives SOC
+analysts ATT&CK mapping, indicators, tool detection, a timeline and a cited incident report. Every claim links back to
+the exact line in the original log. Nothing leaves your machine.
 
-Runs on your own LLM (Ollama, LM Studio, llama.cpp, vLLM...). Works with no LLM at all too, in rules-only mode.
+[![tests](https://github.com/<owner>/LogIngestLLM/actions/workflows/tests.yml/badge.svg)](https://github.com/<owner>/LogIngestLLM/actions/workflows/tests.yml)
+![python](https://img.shields.io/badge/python-3.11%2B-blue)
+![license](https://img.shields.io/badge/license-Apache%202.0-green)
 
-## Quick start (Windows)
+![Dashboard: a Windows intrusion with summary citations](docs/img/overview.png)
 
-Double-click **Start logagent** on the desktop (or `Start logagent.bat` here). It:
+## Download (Windows, macOS, Linux)
 
-1. starts your trained model in the background (if `models\*\adapter` exists) and waits until it answers,
-2. starts the dashboard at http://127.0.0.1:8765 and opens it,
-3. runs an automatic scan every 6 h (`schedule` in `logagent.toml`) while it's open.
+Get the app for your OS and the model files from the [latest release](https://github.com/<owner>/LogIngestLLM/releases/latest):
 
-Use **Start logagent (admin)** to include the Security log (failed logons, account changes, audit-log cleared). Closing the window stops everything. If the model isn't available the dashboard says so in the top bar and falls back to the built-in rules.
+1. `LogIngestLLM-<version>-windows-x64.zip`, `-macos-arm64.zip` (Apple Silicon), `-macos-x64.zip` (Intel) or
+   `-linux-x64.tar.gz`, unpacked anywhere.
+2. The model files (`logingestllm-base-Q4_K_M.gguf.part1`, `.part2`, `logingestllm-triage.lora.gguf`, `SHA256SUMS`)
+   into its `model/` folder.
+3. Double-click **LogIngestLLM** (macOS: *Start LogIngestLLM.command*). The dashboard opens in your browser.
 
-Settings live in `logagent.toml` (copied from `config.example.toml` on first run). Sources with `enabled = false` are listed but not scanned by default.
+The AI runs inside the app: a bundled [llama.cpp](https://github.com/ggml-org/llama.cpp) engine that LogIngestLLM
+starts on `127.0.0.1` and stops on exit. No Python, CUDA, accounts or internet needed; it uses a GPU automatically if
+there is one (Vulkan / Metal) and otherwise the CPU. The builds aren't code-signed yet, so Windows SmartScreen and
+macOS Gatekeeper ask once; `README-FIRST.txt` in the download says how to allow it.
 
-## Quick start (Linux / macOS)
+## Try it from source in 30 seconds
 
 ```bash
-./start-logagent.sh               # --no-browser, --port 8765, --model-port 8081
+git clone https://github.com/<owner>/LogIngestLLM && cd LogIngestLLM
+python -m logagent demo
 ```
 
-Same steps as the Windows launcher. Ctrl+C stops the dashboard and the model it started. On Linux the local systemd journal is a `journald` source, and no admin step is needed if your user can read the system journal (`wheel`/`adm`/`systemd-journal` group).
+The analyzer is pure Python standard library (3.11+), so there's nothing to install. The demo analyzes five bundled
+investigations (a Windows intrusion, a Linux break-in, a scanned web server, a failing device and a healthy laptop)
+and opens the dashboard at http://127.0.0.1:8765. Without a model it runs on rules alone; add `--model` once yours is
+serving.
 
-## Log locations and picking a log
+## Why
 
-Open **LOG LOCATIONS** (top of the sidebar) to manage where logagent looks, without editing the config by hand:
+Logs are mostly noise, the interesting lines are written for the people who wrote the software, and the logs you most
+need help with are the ones you can't paste into a cloud chatbot. A small local model can help, but it is fluent and
+fallible. LogIngestLLM is built around that:
 
-- **Configured**: every source, with *browse / pick*, *test* (resolves the location and reads a sample), *edit*, *remove*, and an on/off switch for RUN SCAN and scheduled scans. Changes are written to `logagent.toml` (the previous version is kept as `logagent.toml.bak`; comments and the rest of the file stay as they were).
-- **Discover**: finds log locations for the OS you're on: the systemd journal, `/var/log`, app log folders under your home directory (Linux); `/var/log`, `~/Library/Logs` (macOS); Event Log channels, `ProgramData`/`AppData` log folders (Windows). It shows how many files you can actually read.
-- **+ Add / open file**: add a location (a folder, glob or file; `type = "files"` detects syslog, journald JSON, app/JSON-lines and .evtx per file), or open one file by path without saving it.
+- **Local only.** Collection, analysis and the model all run on your machine. The dashboard binds to `127.0.0.1`.
+- **Evidence over eloquence.** Model answers cite numbered log lines (`[E3]`) that open the original file at that
+  line. Tools the model names are dropped unless their evidence string occurs in the log. A known-answer evaluation
+  gates every change to rules, prompts and the model.
+- **Your own model.** A QLoRA fine-tune of Qwen3-4B that trains on one 8 GB GPU, improves from your labels, and only
+  replaces the current model when it scores better.
 
-*Browse / pick* lists a location's files (format, size, modified time, whether you can read them), a journal's systemd units, or Windows channels. Pick one or more and press **ANALYZE**: the logs are parsed, every pattern is ranked (rules, then your model), and with *summarize* on, the model writes a whole-log summary: what produced the log, health, key events with UTC times, what the noise is, and next steps.
+## What it does
 
-The summary is OS-aware: logagent works out which OS produced the log (from the source type and the messages themselves: Windows paths and providers, systemd units, `com.apple.*`, Raspberry Pi under-voltage, Jetson `nvgpu`...) and which OS you're viewing it on, and commands are written for the right one (e.g. "run this on the server" when you're reading a server's log copied to your laptop). Files over 100 MB are read from their newest 100 MB.
+| | |
+|---|---|
+| **Triage** | Clusters thousands of lines into patterns, scores them (~65 built-in rules, your Sigma rules, severity, bursts, "first time on this host", tool signatures) and has the model review the top ones: importance, why it matters, what to do. |
+| **Whole-log summary** | What produced the log, health, key events with UTC times, what the noise is, next steps with commands for the OS that wrote the log (it tells a Windows log read on Linux apart from a local one). |
+| **Explain this event** | The line with its parts annotated (public vs private IPs, users, ports, NTSTATUS codes, logon types, Kerberos encryption), what normal looks like, when to worry, and **check it yourself**: the native `journalctl` / `grep` / `Get-WinEvent` command. |
+| **Tools** | Attacker tools (Mimikatz, LinPEAS, reverse shells, C2), abused built-ins (certutil downloads, encoded PowerShell, LSASS dumps via comsvcs.dll, `curl \| sh`, shadow-copy deletion), scanners (Nmap, sqlmap, Nikto, gobuster), remote-access tools, tunnels and miners. Each use links to its line. |
+| **Jump to the event** | Every event remembers its position (file + line, journal cursor, Windows record ID). Open it in the original log with the surrounding lines, page through, search. |
+| **ATT&CK & indicators** | Techniques laid out by tactic (evidence only; a routine logon is not "T1078"), indicators with exact counts, pivot across all past scans, CSV export. |
+| **Timeline & report** | One timeline across every log in a scan; a Markdown or printable (PDF) report with citations resolved to `file:line`. |
+| **Ask your model** | Free-form questions with cited answers and generated follow-ups ("What happened, step by step?", "What did 198.51.100.23 do?"). |
+| **Learn** | A searchable offline reference of Windows event IDs, Sysmon, logon types, failure codes, Linux messages and programs. |
+| **Label & retrain** | A keyboard-driven label queue (`j k u n 1-4 z`) ordered by what teaches the model most; retrain, gate, serve, export to Ollama. |
 
-## Learning to read logs, and analyst tools
+<p>
+<img src="docs/img/explain.png" width="49%" alt="Explain this event">
+<img src="docs/img/log-viewer.png" width="49%" alt="Jump to the event in the original log">
+</p>
+<p>
+<img src="docs/img/tools.png" width="49%" alt="Tools tab">
+<img src="docs/img/attack.png" width="49%" alt="ATT&CK by tactic">
+</p>
 
-- **Explain this event** (open any finding): the line with its parts highlighted (IPs and whether they're public, users, ports, PIDs, status codes, paths), an anatomy table (when, host, source, program, event ID, severity, every Windows/journal field with what it means: logon types, NTSTATUS failure codes, Kerberos encryption types), what normally causes it and when it deserves a closer look, and **check it yourself**: the native command that shows the same events (`journalctl`, `grep`, `Get-WinEvent`, Event Viewer, `log show`), for the OS that produced the log. **Ask model** adds a plain-language walkthrough for someone learning, or a terse brief for an analyst.
-- **REFERENCE** (top bar): searchable, offline notes on Windows event IDs, Sysmon IDs, logon types, failure codes, common Linux messages, severities and programs.
-- **ATT&CK** tab: findings mapped to MITRE ATT&CK techniques, laid out by tactic; click a technique to see its patterns. Only evidence is mapped (rule hits and events that are notable in themselves, such as log clearing or account creation); routine events like a normal logon only show related techniques as context.
-- **Indicators** tab: every IP (public/private), domain, URL, email, file hash and user name, extracted from every event with exact counts. Click *patterns* to filter findings to it, *pivot* to find it in every saved scan, or export CSV.
+## Example: HTB Sherlock Campfire-1 (Kerberoasting)
 
-## Tools, jumping to the event, and asking your model
+Open the two exported logs from the challenge (`SECURITY-DC.evtx`, `Powershell-Operational.evtx`) on Linux, with no
+Windows tools needed:
 
-- **Tools** tab: which tools show up in the logs: attacker tools (Mimikatz, LinPEAS, reverse shells, C2), Windows/Linux built-ins being abused (certutil downloads, encoded PowerShell, comsvcs.dll LSASS dumps, `curl | sh`, shadow-copy deletion), scanners (Nmap, sqlmap, Nikto, gobuster, by command or web user agent), remote-access software, tunnels and miners. A built-in signature catalog checks every event; your model then names the remaining programs and binaries. A model-named tool is only kept if its evidence string really occurs in the log, and it's folded into the catalog entry when it is the same lines. Patterns that contain a tool are scored up so they reach the findings and the model review.
-- **Jump to the event**: every event remembers where it is (file + line + byte offset, journal cursor, or Windows record ID). Click **↗ log** on a tool use, a sample line, an indicator, a first/latest occurrence or a citation to open the original log at that line with the lines around it; page earlier/later, highlight text, `Esc` to go back. Works for text and `.gz` files, the local journal, exported `.evtx`/`.xml` and (on Windows) live channels.
-- **Citations**: the whole-log summary and **Query model** answers cite real events as `[E3]`; click one to open that line. Query model offers questions generated from the scan (what happened step by step, how a tool was used, what an IP did, likely false alarms).
-- Samples to try: `samples/intrusion-auth.log` (Linux break-in), `samples/web-access.log` (web scanners), `samples/windows-security.xml` (Windows intrusion).
+- **Top finding:** Kerberoasting at 2024-05-21 03:18:09 UTC: `alonzo.spire` requested an RC4 (0x17) ticket for
+  `MSSQLService` (ATT&CK T1558.003), linked to the exact record.
+- **Tools:** PowerSploit / PowerView in PowerShell script blocks on the workstation.
+- **Indicator:** the workstation at `172.17.79.129` (183 sightings), pivotable across scans.
 
-## Label queue
+The challenge files aren't redistributed here; `evals/scenarios.json` checks this result when you point
+`LOGAGENT_EVAL_CAMPFIRE1` at your copy.
 
-**LABEL QUEUE** (top bar) shows every pattern you haven't labeled, across all scans, once, ordered by what your label teaches the model most: where the model and the rules disagree, alarms to confirm, errors no rule covers, new and recurring patterns. Keys: `j`/`k` move, `u` relevant (suggested importance), `1`-`4` relevant as critical/high/medium/low, `n` noise, `s` skip, `z` undo, `e` explain, `o` open in its scan, `?` help. The same keys work in a scan's findings table. After 25 new labels it shows the retrain commands.
+## Use it on your own logs
 
-## How it decides what's valuable
+```bash
+python -m logagent ui            # dashboard; then LOG LOCATIONS → Discover / Add / open a file
+./start-logagent.sh              # Linux/macOS: also starts your model if you have one
+```
 
-1. **Collect** events from each source into one format (time, host, severity, program, message).
-2. **Cluster** identical messages into patterns (IPs, numbers, paths and IDs are masked), so 4,000 cron lines become one row.
-3. **Score** each pattern:
-   - ~50 built-in rules for things that actually matter (disk/SD card I/O errors, filesystem corruption, OOM killer, kernel panics, WHEA hardware errors, blue screens, unexpected shutdowns, under-voltage, thermal throttling, Jetson GPU faults, SSH brute force, new admin accounts, Defender detections, audit-log cleared, service crash loops, app tracebacks...)
-   - severity, burst size, and **"first time ever seen on this host"** (it keeps a baseline across scans)
-   - known-benign chatter (DCOM 10016, cron runs...) is suppressed
-4. **Review**: only the top ~40 patterns (not your raw logs) go to the LLM, which correlates them (e.g. *under-voltage → SD card errors*), drops false alarms, and writes the summary and findings.
+On Windows, double-click **Start logagent** (or **Start logagent (admin)** to include the Security log).
 
-## Your LLM
+**Log locations** discovers log folders, the journal and Event Log channels for the OS you're on, lets you add a
+folder, glob or file (the format is detected per file), and browse a location to pick exactly which files, systemd
+units or channels to analyze. Edits are written to `logagent.toml` with your comments kept.
 
-In `logagent.toml`:
+| Source | How |
+|---|---|
+| Windows Event Log | live channels via `wevtutil`; exported `.evtx` / `.xml` anywhere (built-in `.evtx` reader on Linux/macOS) |
+| Linux | systemd journal (local), syslog files (RFC 3164/5424/ISO), rotated `.gz` |
+| Web servers | Apache / nginx combined access logs (scanner user agents, status codes) |
+| Applications | text or JSON-lines logs; tracebacks and stack traces folded into one event |
+
+Logs from other machines are analyzed by copying or exporting them here (set the source's optional `host` so
+findings say which machine they came from). Collection is local only by design.
+
+### Command line
+
+```bash
+python -m logagent scan --file files:/var/log --window all --summarize   # folder; format detected per file
+python -m logagent scan --file files:./case/SECURITY-DC.evtx --json > scan.json
+python -m logagent eval                  # known-answer checks: rules, tools, indicators, ATT&CK, false alarms
+python -m logagent eval --model          # ...plus your model: triage, summary, cited answers
+python -m logagent dataset               # build training data from your labels + scans + synthetic scenarios
+```
+
+### Sigma rules
+
+Drop Sigma `.yml` rules into `rules/sigma/` (or set `sigma_dir`). Selections, field modifiers (`contains`,
+`startswith`, `endswith`, `all`, `re`, `cidr`, `windash`, `exists`), wildcards and `and / or / not / 1 of / all of`
+conditions are supported for Windows (Security, Sysmon, PowerShell) and Linux logs. Rules using aggregations or
+base64 modifiers are skipped and counted, never half-applied. Three example rules ship in `rules/sigma/examples/`.
+
+## Your own model
+
+| step | command (Linux; Windows uses `.venv-train\Scripts\python`) |
+|---|---|
+| set up (NVIDIA GPU, ≥ 8 GB) | `python3.12 -m venv .venv-train && .venv-train/bin/pip install torch --index-url https://download.pytorch.org/whl/cu128 && .venv-train/bin/pip install transformers peft accelerate bitsandbytes` |
+| label | **LABEL QUEUE** in the dashboard (your labels count ×3) |
+| build data | `python -m logagent dataset` |
+| train | `.venv-train/bin/python trainer/train.py` (QLoRA, ~45 min on an RTX 4060 Laptop, 5.8 GB VRAM) |
+| gate | `.venv-train/bin/python trainer/promote.py` (switches `models/ACTIVE` only if the new adapter scores better) |
+| serve | `.venv-train/bin/python trainer/serve.py` (OpenAI-compatible on :8081; the launcher does this) |
+| package | `python packaging/fetch_llama.py`, then `.venv-train/bin/python trainer/export.py --llama-cpp ~/src/llama.cpp --install` (GGUF base + LoRA for the built-in engine; release files in `dist/model/`) |
+
+`logagent.toml`:
 
 ```toml
 [llm]
-provider = "ollama"                  # or "openai" for any OpenAI-compatible server
-base_url = "http://localhost:11434"  # LM Studio: http://localhost:1234/v1, llama.cpp: http://localhost:8080/v1
-model = "qwen3:8b"
+provider = "openai"                 # "bundled" = the built-in engine (automatic when model/ has the files)
+base_url = "http://127.0.0.1:8081/v1"
+model = "logagent"                  # your adapter: per-pattern triage
+summary_model = "logagent-base"     # same weights, adapter off: summaries, explanations, Q&A, tool naming
+mode = "triage"
 ```
 
-Check it with `python -m logagent check-llm`. `provider = "none"` = rules only.
 
-## Training your own model
+## How it works
 
-The agent can run on a model you train yourself: an open base model (Qwen3 4B Instruct, Apache 2.0) fine-tuned with QLoRA on your GPU to triage *your* logs the way *you* want. The base model's weights are downloaded once, and your trained part (a ~60 MB LoRA adapter in `models/`) never leaves your PC.
-
-1. **Label.** In the dashboard, mark findings 👍 *worth knowing* (with an importance) or 👎 *noise*. Turn on "also show lower-scored patterns" to label anything the rules missed. Labels go to `data/feedback.json`.
-2. **Build the dataset.** Your labels count most (weighted x3). The built-in rules label everything else, and synthetic Linux/Windows/app scenarios fill the gaps.
-   ```bash
-   python -m logagent dataset
-   ```
-3. **Train** (one-time setup of a Python 3.12 environment, since 3.14 has no CUDA PyTorch builds yet):
-   ```bash
-   py -3.12 -m venv .venv-train
-   .venv-train\Scripts\pip install torch --index-url https://download.pytorch.org/whl/cu128
-   .venv-train\Scripts\pip install transformers peft accelerate bitsandbytes
-   .venv-train\Scripts\python trainer\train.py
-   ```
-4. **Evaluate**: compare against the untrained base model on held-out data (including scans you labeled):
-   ```bash
-   .venv-train\Scripts\python trainer\evaluate.py --adapter none
-   .venv-train\Scripts\python trainer\evaluate.py
-   ```
-5. **Use it**: `.venv-train\Scripts\python trainer\serve.py`, then in `logagent.toml`:
-   ```toml
-   [llm]
-   provider = "openai"
-   base_url = "http://127.0.0.1:8081/v1"
-   model = "logagent"
-   mode = "triage"      # the model reviews each pattern separately; this is what it was trained on
-   summary_model = "logagent-base"   # whole-log summaries: same weights with your adapter switched off
-   ```
-   `serve.py` answers to two model ids: `logagent` (your adapter) and `logagent-base` (adapter off for that request). The adapter is trained for per-pattern triage JSON, so free-form summaries come out better from the base model.
-
-Repeat 1-4 as you label more. Each run is saved as a new version in `models/` with its eval score.
-
-## Command line
-
-```bash
-python -m logagent scan                                   # all configured sources
-python -m logagent scan --window 7d --source "This PC"
-python -m logagent scan --file syslog:/path/syslog --file app:./app.log --no-llm
-python -m logagent scan --file files:/var/log --window all  # folder, format detected per file
-python -m logagent scan --json > scan.json
+```mermaid
+flowchart LR
+  A[logs] --> B[parse + position] --> C[cluster patterns] --> D[score: rules · Sigma · tools · novelty]
+  D --> E[your model: triage] --> R[(scan)]
+  B --> F[indicators · tool signatures] --> R
+  D --> G[digest] --> H[summary with citations] --> R
+  R --> UI[dashboard · timeline · report · eval]
 ```
 
-Scans are saved in `data/scans/`. Add your own rules under `[[rules]]` in the config.
+Design notes, module map, evaluation and security: [docs/ENGINEERING.md](docs/ENGINEERING.md).
 
-## Tests
+## Privacy and security
 
-```bash
-python -m pytest -q
+- Local only: no cloud calls, no telemetry. The dashboard binds `127.0.0.1`, checks the `Host` header and refuses
+  file browsing if it's ever bound wider.
+- The browser never sends file paths to read; the log viewer resolves references from scans the server wrote.
+- Log text is treated as untrusted model input: prompts say so, model output is parsed as data, model-named tools
+  and citations are verified against the log.
+
+## Project layout
+
 ```
+logagent/            analyzer (standard library only)
+  collectors/        sources, text parsers, Windows + stdlib .evtx reader
+  static/index.html  the dashboard (single file, no build step)
+  train/             dataset builder + synthetic scenarios
+trainer/             model training, evaluation, promotion gate, serving, GGUF export (separate venv)
+evals/               known-answer scenarios
+rules/sigma/         your Sigma rules (+ examples)
+samples/             example logs used by the demo and the evaluation
+tests/               unit tests + known-answer scenarios (CI: Linux, Windows, macOS × Python 3.11–3.13)
+```
+
+## License
+
+Apache 2.0; see [LICENSE](LICENSE) and [NOTICE](NOTICE). The base model, Qwen3-4B-Instruct-2507, is Apache 2.0.

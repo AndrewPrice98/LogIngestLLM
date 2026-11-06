@@ -1,0 +1,23 @@
+title: Kerberos Service Ticket With RC4 Encryption
+id: 0e2c4b8a-5d6f-4f3e-8a7b-2c9d1e0f3a42
+status: experimental
+description: A service ticket was issued with RC4 (0x17) for a non-machine account. Kerberoasting tools ask for RC4 so the ticket can be cracked offline.
+author: logagent examples
+tags:
+    - attack.credential-access
+    - attack.t1558.003
+logsource:
+    product: windows
+    service: security
+detection:
+    selection:
+        EventID: 4769
+        TicketEncryptionType: '0x17'
+    filter_machine:
+        ServiceName|endswith: '$'
+    filter_krbtgt:
+        ServiceName: 'krbtgt'
+    condition: selection and not 1 of filter_*
+falsepositives:
+    - Legacy applications that only support RC4
+level: high

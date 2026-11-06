@@ -188,7 +188,7 @@ def collect(spec: dict, window: timedelta, warn=print, max_events: int = 20000) 
     kind = spec.get("type", "").lower()
     window = parse_window(spec.get("since"), window)
     cutoff = datetime.now(timezone.utc) - window
-    host = socket.gethostname()
+    host = spec.get("host") or socket.gethostname()  # set host for logs copied from another machine
 
     if kind == "files":
         files = _files(spec["path"])

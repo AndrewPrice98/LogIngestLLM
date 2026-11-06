@@ -1,0 +1,25 @@
+title: Certutil Used to Download a File
+id: 7c1e6d32-1f3a-4bd2-9a1e-0b5f3f0c2a11
+status: experimental
+description: certutil.exe with -urlcache or -verifyctl fetches files from a URL, a common way to bring tools onto a machine.
+author: logagent examples
+tags:
+    - attack.command-and-control
+    - attack.t1105
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection_img:
+        - Image|endswith: '\certutil.exe'
+        - OriginalFileName: 'CertUtil.exe'
+    selection_cli:
+        CommandLine|contains:
+            - 'urlcache'
+            - 'verifyctl'
+    selection_url:
+        CommandLine|contains: 'http'
+    condition: all of selection_*
+falsepositives:
+    - Administrators fetching certificate revocation lists by hand
+level: high

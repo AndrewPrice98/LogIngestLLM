@@ -1,0 +1,8 @@
+LogIngestLLM
+Copyright 2026 the LogIngestLLM authors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+The model it runs on is a fine-tune of Qwen3-4B-Instruct-2507 (Qwen team, Alibaba Cloud), licensed under the
+Apache License, Version 2.0. MITRE ATT&CK technique and tactic names are used under MITRE's terms of use
+(https://attack.mitre.org/resources/legal-and-branding/terms-of-use/).

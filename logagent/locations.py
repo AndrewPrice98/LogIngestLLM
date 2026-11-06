@@ -1,4 +1,4 @@
-"""Log locations: what this OS offers, finding logs, browsing a location, testing it, and saving sources.
+"""Log locations on this machine: what this OS offers, finding logs, browsing a location, testing it, saving sources.
 
 Everything here backs the dashboard's "Log locations" view. Sources are saved to the [[sources]] tables of
 logagent.toml; the rest of the file (comments, [llm], [[rules]]) is left as it was.
@@ -21,11 +21,8 @@ from pathlib import Path
 from .collectors import windows
 from .collectors.sources import (SourceError, _files, collect, detect_format, is_log_file, parse_window)
 
-TYPES = ("files", "journald", "syslog", "app", "windows", "evtx", "ssh")
+TYPES = ("files", "journald", "syslog", "app", "windows", "evtx")
 FORMATS = ("auto", "syslog", "journal", "app", "evtx")
-DEVICES = ("linux", "pi", "jetson")
-_SAFE_HOST = re.compile(r"^[A-Za-z0-9_.@:\[\]-]{1,253}$")
-_SAFE_REMOTE_GLOB = re.compile(r"^[\w./~*?\[\]-]{1,300}$")
 _SAFE_UNIT = re.compile(r"^[\w@.:\\-]{1,200}$")
 _SAFE_CHANNEL = re.compile(r"^[\w ./-]{1,200}$")
 
@@ -74,8 +71,6 @@ def system_info() -> dict:
         types.append("journald")
     if sysname == "Windows":
         types += ["windows", "evtx"]
-    if shutil.which("ssh"):
-        types.append("ssh")
     notes = []
     if journal and not journal_system:
         notes.append("journalctl only shows your user journal; add yourself to the systemd-journal group "
@@ -136,27 +131,6 @@ def validate_source(spec: dict) -> dict:
         out["channels"] = _list(spec.get("channels") or ["System", "Application"], "channels", _SAFE_CHANNEL)
     if kind == "journald" and spec.get("units"):
         out["units"] = _list(spec["units"], "units", _SAFE_UNIT)
-    if kind == "ssh":
-        host = _str(spec.get("host"), "host", 253)
-        if host.startswith("-") or not _SAFE_HOST.match(host):
-            raise ValueError("host must look like user@hostname")
-        out["host"] = host
-        device = str(spec.get("device") or "linux").lower()
-        if device not in DEVICES:
-            raise ValueError(f"device must be one of {', '.join(DEVICES)}")
-        out["device"] = device
-        if spec.get("port") not in (None, "", 22, "22"):
-            try:
-                port = int(spec["port"])
-            except (TypeError, ValueError):
-                raise ValueError("port must be a number") from None
-            if not 0 < port < 65536:
-                raise ValueError("port must be 1-65535")
-            out["port"] = port
-        if spec.get("identity"):
-            out["identity"] = _str(spec["identity"], "identity")
-        if spec.get("logs"):
-            out["logs"] = _list(spec["logs"], "logs", _SAFE_REMOTE_GLOB)
     if spec.get("since"):
         out["since"] = _str(spec["since"], "since", 10)
     if spec.get("enabled") is False:
@@ -331,19 +305,6 @@ def _dir_name(d: str) -> str:
     return p.name or str(p).replace(home, "~")
 
 
-def _ssh_hosts() -> list[str]:
-    cfg = Path.home() / ".ssh" / "config"
-    hosts = []
-    try:
-        for line in cfg.read_text(encoding="utf-8", errors="replace").splitlines():
-            parts = line.strip().split()
-            if len(parts) >= 2 and parts[0].lower() == "host":
-                hosts += [h for h in parts[1:] if not any(c in h for c in "*?!")]
-    except OSError:
-        pass
-    return hosts
-
-
 def _same(spec: dict, configured: list[dict]) -> bool:
     keys = ("type", "path", "host", "channels", "units")
     norm = lambda s: {k: (os.path.normpath(os.path.expanduser(s[k])) if k == "path" else s[k]) for k in keys if s.get(k)}
@@ -403,11 +364,6 @@ def discover(cfg: dict) -> dict:
     for d, files in sorted(_collapse(found).items(), key=lambda kv: (-len(kv[1]), kv[0])):
         files = sorted(set(files))
         add({"name": _dir_name(d), "type": "files", "path": d}, "", files)
-    for h in _ssh_hosts():
-        low = h.lower()
-        device = "pi" if ("pi" in low or "rasp" in low) else "jetson" if any(
-            k in low for k in ("jetson", "orin", "xavier", "nano")) else "linux"
-        add({"name": h, "type": "ssh", "host": h, "device": device}, "from ~/.ssh/config (needs key login)")
     return {"system": info, "candidates": cands[:80]}
 
 
@@ -446,8 +402,7 @@ def browse(spec: dict) -> dict:
     if kind == "windows":
         chans = list(dict.fromkeys((spec.get("channels") or []) + windows.DEFAULT_CHANNELS))
         return {"kind": "channels", "items": [{"channel": c} for c in chans], "hint": None}
-    return {"kind": "whole", "items": [], "hint": "this source is analyzed as a whole (journal, health probe and "
-                                                   "its configured log files)"}
+    return {"kind": "whole", "items": [], "hint": "this source is analyzed as a whole"}
 
 
 def test_source(cfg: dict, spec: dict, max_events: int = 3000) -> dict:

@@ -2,7 +2,6 @@ import json
 from datetime import datetime, timedelta, timezone
 
 from logagent.analysis import Baseline, cluster_events, score_clusters, select_findings, template_of
-from logagent.collectors.sources import _health_events
 from logagent.collectors.textlogs import parse_app_log, parse_journal_json, parse_syslog
 from logagent.collectors.windows import parse_events_xml
 from logagent.signals import load_rules
@@ -83,13 +82,6 @@ def test_windows_xml_and_noise():
     clusters = score_clusters(cluster_events(evs, RULES))
     found = select_findings(clusters)
     assert [c.rule.id for c in found] == ["win_whea"]  # DCOM 10016 suppressed
-
-
-def test_pi_health_probe():
-    out = "@@disk 97%\n@@throttled 0x50005\n@@temp cpu-thermal 86000\n@@failed camera.service\n"
-    evs = list(_health_events(out, "pi", "pi"))
-    ids, _ = rule_ids(evs)
-    assert {"lx_disk_full", "pi_undervoltage", "thermal_throttle", "lx_unit_failed"} <= ids
 
 
 def test_novelty_bonus(tmp_path):

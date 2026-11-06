@@ -2,7 +2,7 @@
 
 Reads your logs, throws away the noise, and tells you the handful of things worth your attention, with why they matter and what to do.
 
-Sources: **Windows Event Log**, **Linux syslog / journald**, **your own app logs** (text or JSON lines, stack traces grouped), and **Raspberry Pi / Jetson** boxes over SSH (plus live health checks: under-voltage, throttling, temperature, disk, failed services).
+A **local-only log analyzer and analyst co-pilot**. Sources: **Windows Event Log**, **Linux syslog / journald**, **your own app logs** (text or JSON lines, stack traces grouped), **web server access logs**, and any log file or folder on this machine. Logs from other machines are analyzed by copying or exporting them here and opening them. Nothing leaves your computer.
 
 Runs on your own LLM (Ollama, LM Studio, llama.cpp, vLLM...). Works with no LLM at all too, in rules-only mode.
 
@@ -31,12 +31,12 @@ Same steps as the Windows launcher. Ctrl+C stops the dashboard and the model it 
 Open **LOG LOCATIONS** (top of the sidebar) to manage where logagent looks, without editing the config by hand:
 
 - **Configured**: every source, with *browse / pick*, *test* (resolves the location and reads a sample), *edit*, *remove*, and an on/off switch for RUN SCAN and scheduled scans. Changes are written to `logagent.toml` (the previous version is kept as `logagent.toml.bak`; comments and the rest of the file stay as they were).
-- **Discover**: finds log locations for the OS you're on: the systemd journal, `/var/log`, app log folders under your home directory (Linux); `/var/log`, `~/Library/Logs` (macOS); Event Log channels, `ProgramData`/`AppData` log folders (Windows); and SSH hosts from `~/.ssh/config`. It shows how many files you can actually read.
+- **Discover**: finds log locations for the OS you're on: the systemd journal, `/var/log`, app log folders under your home directory (Linux); `/var/log`, `~/Library/Logs` (macOS); Event Log channels, `ProgramData`/`AppData` log folders (Windows). It shows how many files you can actually read.
 - **+ Add / open file**: add a location (a folder, glob or file; `type = "files"` detects syslog, journald JSON, app/JSON-lines and .evtx per file), or open one file by path without saving it.
 
 *Browse / pick* lists a location's files (format, size, modified time, whether you can read them), a journal's systemd units, or Windows channels. Pick one or more and press **ANALYZE**: the logs are parsed, every pattern is ranked (rules, then your model), and with *summarize* on, the model writes a whole-log summary: what produced the log, health, key events with UTC times, what the noise is, and next steps.
 
-The summary is OS-aware: logagent works out which OS produced the log (from the source type and the messages themselves: Windows paths and providers, systemd units, `com.apple.*`, Raspberry Pi under-voltage, Jetson `nvgpu`...) and which OS you're viewing it on, and commands are written for the right one (e.g. "ssh into the Pi first" when you're reading a Pi's log on your laptop). Files over 100 MB are read from their newest 100 MB.
+The summary is OS-aware: logagent works out which OS produced the log (from the source type and the messages themselves: Windows paths and providers, systemd units, `com.apple.*`, Raspberry Pi under-voltage, Jetson `nvgpu`...) and which OS you're viewing it on, and commands are written for the right one (e.g. "run this on the server" when you're reading a server's log copied to your laptop). Files over 100 MB are read from their newest 100 MB.
 
 ## Learning to read logs, and analyst tools
 
@@ -48,7 +48,7 @@ The summary is OS-aware: logagent works out which OS produced the log (from the 
 ## Tools, jumping to the event, and asking your model
 
 - **Tools** tab: which tools show up in the logs: attacker tools (Mimikatz, LinPEAS, reverse shells, C2), Windows/Linux built-ins being abused (certutil downloads, encoded PowerShell, comsvcs.dll LSASS dumps, `curl | sh`, shadow-copy deletion), scanners (Nmap, sqlmap, Nikto, gobuster, by command or web user agent), remote-access software, tunnels and miners. A built-in signature catalog checks every event; your model then names the remaining programs and binaries. A model-named tool is only kept if its evidence string really occurs in the log, and it's folded into the catalog entry when it is the same lines. Patterns that contain a tool are scored up so they reach the findings and the model review.
-- **Jump to the event**: every event remembers where it is (file + line + byte offset, journal cursor, or Windows record ID). Click **↗ log** on a tool use, a sample line, an indicator, a first/latest occurrence or a citation to open the original log at that line with the lines around it; page earlier/later, highlight text, `Esc` to go back. Works for text and `.gz` files, the local journal, a Pi/Jetson's journal over SSH, exported `.evtx`/`.xml` and (on Windows) live channels.
+- **Jump to the event**: every event remembers where it is (file + line + byte offset, journal cursor, or Windows record ID). Click **↗ log** on a tool use, a sample line, an indicator, a first/latest occurrence or a citation to open the original log at that line with the lines around it; page earlier/later, highlight text, `Esc` to go back. Works for text and `.gz` files, the local journal, exported `.evtx`/`.xml` and (on Windows) live channels.
 - **Citations**: the whole-log summary and **Query model** answers cite real events as `[E3]`; click one to open that line. Query model offers questions generated from the scan (what happened step by step, how a tool was used, what an IP did, likely false alarms).
 - Samples to try: `samples/intrusion-auth.log` (Linux break-in), `samples/web-access.log` (web scanners), `samples/windows-security.xml` (Windows intrusion).
 
@@ -84,7 +84,7 @@ Check it with `python -m logagent check-llm`. `provider = "none"` = rules only.
 The agent can run on a model you train yourself: an open base model (Qwen3 4B Instruct, Apache 2.0) fine-tuned with QLoRA on your GPU to triage *your* logs the way *you* want. The base model's weights are downloaded once, and your trained part (a ~60 MB LoRA adapter in `models/`) never leaves your PC.
 
 1. **Label.** In the dashboard, mark findings 👍 *worth knowing* (with an importance) or 👎 *noise*. Turn on "also show lower-scored patterns" to label anything the rules missed. Labels go to `data/feedback.json`.
-2. **Build the dataset.** Your labels count most (weighted x3). The built-in rules label everything else, and synthetic Pi/Jetson/Linux scenarios fill the gaps.
+2. **Build the dataset.** Your labels count most (weighted x3). The built-in rules label everything else, and synthetic Linux/Windows/app scenarios fill the gaps.
    ```bash
    python -m logagent dataset
    ```
@@ -112,21 +112,6 @@ The agent can run on a model you train yourself: an open base model (Qwen3 4B In
    `serve.py` answers to two model ids: `logagent` (your adapter) and `logagent-base` (adapter off for that request). The adapter is trained for per-pattern triage JSON, so free-form summaries come out better from the base model.
 
 Repeat 1-4 as you label more. Each run is saved as a new version in `models/` with its eval score.
-
-## Raspberry Pi / Jetson
-
-Set up key login once (`ssh-copy-id pi@raspberrypi.local`), then:
-
-```toml
-[[sources]]
-name = "pi"
-type = "ssh"
-host = "pi@raspberrypi.local"
-device = "pi"                # or "jetson" / "linux"
-logs = ["/home/pi/myapp/*.log"]
-```
-
-Nothing is installed on the device; it runs `journalctl` and a few read-only health commands over SSH.
 
 ## Command line
 

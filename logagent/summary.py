@@ -37,10 +37,6 @@ def guess_origin(sources: list[dict], events: list[Event]) -> dict:
         elif t == "journald":
             votes["Linux"] += 50
             evidence.append("systemd journal")
-        elif t == "ssh":
-            votes["Linux"] += 50
-            details[{"pi": "Raspberry Pi OS", "jetson": "NVIDIA Jetson (L4T)"}.get(s.get("device"), "")] += 50
-            evidence.append(f"ssh device={s.get('device', 'linux')}")
     step = max(1, len(events) // 2000)
     for e in events[::step]:
         if e.source.startswith("windows:"):
@@ -56,7 +52,7 @@ def guess_origin(sources: list[dict], events: list[Event]) -> dict:
                 if detail:
                     details[detail] += 3
     for h in {e.host.lower() for e in events[::step]}:
-        if "raspberrypi" in h or h.startswith("pi") or "-pi" in h:
+        if "raspberrypi" in h:
             details["Raspberry Pi OS"] += 5
         if "jetson" in h:
             details["NVIDIA Jetson (L4T)"] += 5
@@ -124,7 +120,7 @@ def build_digest(sources: list[dict], events: list[Event], clusters: list[dict],
         "viewer_os": viewer.get("pretty") or viewer.get("os"),
         "origin_os": origin.get("os"), "origin_detail": origin.get("detail"),
         "origin_confidence": origin.get("confidence"), "origin_evidence": origin.get("evidence"),
-        "sources": [{k: s[k] for k in ("name", "type", "path", "host", "device", "channels", "units") if s.get(k)}
+        "sources": [{k: s[k] for k in ("name", "type", "path", "channels", "units") if s.get(k)}
                     for s in sources],
         "files": files[:12],
         "events": len(events), "first_utc": utc_s(ts[0]) if ts else None,

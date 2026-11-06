@@ -1054,12 +1054,12 @@ function suggestions(s) {
 // ---------- log locations: configure, discover, browse, pick files to analyze
 const TYPE_INFO = {files: 'folder, glob or file; format detected per file', journald: 'systemd journal on this machine',
   syslog: 'syslog-format text files', app: 'your application logs (text or JSON lines)', windows: 'live Windows Event Log channels',
-  evtx: 'exported .evtx / .xml event log', ssh: 'Raspberry Pi / Jetson / Linux box over SSH (key login)'};
+  evtx: 'exported .evtx / .xml event log'};
 const PATH_HINT = {Linux: '/var/log   ~/myapp/logs/*.log   /var/log/nginx/error.log',
   macOS: '~/Library/Logs   /var/log/system.log   ~/myapp/logs/*.log',
   Windows: 'C:\\ProgramData\\MyApp\\logs   %LOCALAPPDATA%\\MyApp\\*.log   D:\\exports\\System.evtx'};
 const fmtBytes = n => n == null ? '—' : n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : n < 1073741824 ? (n / 1048576).toFixed(1) + ' MB' : (n / 1073741824).toFixed(2) + ' GB';
-const where = s => s.path || s.host || (s.channels || []).join(', ') || (s.units || []).join(', ') || (s.type === 'journald' ? 'entire journal' : '—');
+const where = s => s.path || (s.channels || []).join(', ') || (s.units || []).join(', ') || (s.type === 'journald' ? 'entire journal' : '—');
 const baseName = p => p.split(/[\\/]/).filter(Boolean).pop() || p;
 function uniqueName(base, taken) {
   const t = new Set(taken.map(x => x.toLowerCase())); let n = base, i = 2;
@@ -1110,7 +1110,7 @@ function renderConfigured(m) {
     t.append(el('tr', {class: 'r' + (picker?.key === 'src' + i || editIdx === i ? ' open' : '')},
       el('td', {class: 'title'}, s.name),
       el('td', {}, el('span', {class: 'tag'}, s.type), avail ? null : el('span', {class: 'lbl', style: 'color:var(--warn)'}, 'not on this os')),
-      el('td', {class: 'msg'}, where(s), s.format ? ` [${s.format}]` : '', s.device ? ` [${s.device}]` : ''),
+      el('td', {class: 'msg'}, where(s), s.format ? ` [${s.format}]` : ''),
       el('td', {}, el('button', {class: 'mini' + (s.enabled === false ? '' : ' on'), title: 'include in RUN SCAN and scheduled scans',
         on: {click: () => saveSources(srcs.map((x, j) => j === i ? {...x, enabled: x.enabled === false} : x))}}, s.enabled === false ? 'off' : 'on')),
       el('td', {class: 'result' + (tr ? (tr.pending ? '' : tr.ok ? ' ok' : ' bad') : '')}, tr ? testLine(tr) : '—'),
@@ -1148,7 +1148,7 @@ function sourceForm(f, onSave, onCancel) {
   const res = el('div', {class: 'result'});
   const bind = (k, attrs = {}) => el('input', {type: 'text', value: Array.isArray(f[k]) ? f[k].join(', ') : (f[k] ?? ''), ...attrs,
     on: {input: e => { f[k] = e.target.value; }}});
-  const fields = [el('label', {}, 'name'), bind('name', {placeholder: 'e.g. nginx, pi kitchen, myapp'}),
+  const fields = [el('label', {}, 'name'), bind('name', {placeholder: 'e.g. nginx, var log, myapp'}),
     el('label', {}, 'type'), el('select', {on: {change: e => { f.type = e.target.value; renderLocations(); }}},
       ...types.map(t => el('option', {value: t, selected: t === f.type}, t + ((sys.types || []).includes(t) ? '' : ' (not on this os)')))),
     el('div', {class: 'hint'}, TYPE_INFO[f.type] || '')];
@@ -1159,14 +1159,6 @@ function sourceForm(f, onSave, onCancel) {
   if (f.type === 'app') fields.push(el('label', {}, 'app name'), bind('app', {placeholder: 'optional, defaults to the file name'}));
   if (f.type === 'windows') fields.push(el('label', {}, 'channels'), bind('channels', {placeholder: 'System, Application, Security'}));
   if (f.type === 'journald') fields.push(el('label', {}, 'units'), bind('units', {placeholder: 'optional: nginx.service, sshd.service (empty = whole journal)'}));
-  if (f.type === 'ssh') fields.push(
-    el('label', {}, 'host'), bind('host', {placeholder: 'pi@raspberrypi.local'}),
-    el('div', {class: 'hint'}, 'key login first: ssh-copy-id ' + (f.host || 'pi@raspberrypi.local')),
-    el('label', {}, 'device'), el('select', {on: {change: e => { f.device = e.target.value; }}},
-      ...['linux', 'pi', 'jetson'].map(o => el('option', {value: o, selected: (f.device || 'linux') === o}, o))),
-    el('label', {}, 'port'), bind('port', {placeholder: '22'}),
-    el('label', {}, 'identity'), bind('identity', {placeholder: 'optional: ~/.ssh/id_ed25519'}),
-    el('label', {}, 'remote logs'), bind('logs', {placeholder: 'optional: /home/pi/myapp/*.log, /var/log/nginx/error.log'}));
   fields.push(el('label', {}, 'enabled'), el('label', {class: 'chk', style: 'margin:0'}, el('input', {type: 'checkbox', checked: f.enabled !== false,
     on: {change: e => { f.enabled = e.target.checked; }}}), 'include in RUN SCAN and scheduled scans'));
   fields.push(el('span', {}), el('div', {class: 'row'},
@@ -1301,7 +1293,7 @@ async function renderDiscover(m) {
     const noAccess = c.files != null && c.readable === 0 || c.readable_ok === false;
     t.append(el('tr', {class: 'r' + (picker?.key === key ? ' open' : '')},
       el('td', {class: 'title'}, s.name, c.note ? el('div', {class: 'lbl'}, c.note) : null),
-      el('td', {}, el('span', {class: 'tag'}, s.type), s.device ? el('span', {class: 'tag'}, s.device) : null),
+      el('td', {}, el('span', {class: 'tag'}, s.type)),
       el('td', {class: 'msg'}, where(s)),
       el('td', {class: 'n', style: noAccess ? 'color:var(--warn)' : ''}, c.files != null ? `${c.readable}/${c.files}` : '—', c.files != null ? el('div', {class: 'lbl'}, 'readable') : null),
       el('td', {class: 'n'}, fmtBytes(c.bytes)), el('td', {class: 'ts'}, c.newest ? ts(c.newest) : '—'),

@@ -90,9 +90,6 @@ def _source_note(source: str) -> str:
         return "syslog text file: one line per event, 'timestamp host program[pid]: message'"
     if source.startswith("app:"):
         return f"application log file of '{source[4:]}'"
-    dev, _, rest = source.partition(":")
-    if dev in ("pi", "jetson", "linux"):
-        return f"{ {'pi': 'Raspberry Pi', 'jetson': 'NVIDIA Jetson', 'linux': 'Linux box'}[dev]} over SSH ({rest})"
     return source
 
 
@@ -199,20 +196,15 @@ def commands(cluster: dict, scan: dict) -> list[dict]:
                         "cmd": f"eventvwr.msc → Windows Logs → {chan} → Filter Current Log… → Event IDs: {eid}"})
         return out
 
-    dev, _, rest = src.partition(":")
-    ssh = next((s for s in specs if s.get("type") == "ssh" and (s.get("name") == cluster.get("host") or
-                                                               s.get("host", "").split("@")[-1] == cluster.get("host"))), None)
-    if src == "journald" or (ssh and rest == "journald"):
+    if src == "journald":
         sel = "-k" if prog == "kernel" else f"-t {_sq(prog)}" if prog else ""
         j = f"journalctl {sel} --since {_sq(since)} --until {_sq(until)} -g {_sq(kw)} --no-pager".replace("  ", " ")
         jv = f"journalctl {sel} --since {_sq(since)} -g {_sq(kw)} -o verbose -n 1 --no-pager".replace("  ", " ")
-        if ssh:
-            j, jv = f"ssh {ssh['host']} {_sq(j)}", f"ssh {ssh['host']} {_sq(jv)}"
         out.append({"os": "Linux", "label": "the same events from the journal", "cmd": j})
         out.append({"os": "Linux", "label": "every field the journal stored for the newest one", "cmd": jv})
         if prog and prog != "kernel":
             out.append({"os": "Linux", "label": "is that program's service healthy right now?",
-                        "cmd": (f"ssh {ssh['host']} " if ssh else "") + f"systemctl status {_sq(prog)} --no-pager"})
+                        "cmd": f"systemctl status {_sq(prog)} --no-pager"})
         return out
 
     files = _matching_files(cluster, specs)

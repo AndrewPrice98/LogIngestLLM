@@ -6,9 +6,10 @@ up "Next steps". `README.md` is the user-facing doc; this file is the engineerin
 
 ## What this is
 
-`logagent`: ingests Windows Event Log, Linux syslog/journald, the owner's own app logs, and Raspberry Pi /
-Jetson logs over SSH, then surfaces ("nitpicks") the few events worth the owner's attention, with why and
-what to do. It has a local web dashboard and runs on **a model the owner trained himself**.
+`logagent`: a **local-only log analyzer and analyst co-pilot**. It reads logs on the machine it runs on (Windows
+Event Log, journald/syslog, app logs, and log files the user points it at or opens), surfaces the events worth
+attention with why and what to do, and helps people learning to read logs as well as SOC analysts. It has a
+local web dashboard and runs on **a model the owner trained himself**.
 
 ## Owner's decisions (do not re-ask)
 
@@ -19,6 +20,9 @@ what to do. It has a local web dashboard and runs on **a model the owner trained
 - **UI style:** dense, technical, precise (ops console look, exact UTC timestamps, IDs, counts, rates).
   Avoid friendly or marketing-style UI.
 - He wants it "good to go": one-click start, robust fallbacks, no manual steps.
+- **Scope (2026-11-06):** a local-only log analyzer and analyst co-pilot. **Raspberry Pi / Jetson monitoring over
+  SSH is not part of the product** (it came from an earlier agent's notes, not from the owner). Don't build toward
+  remote device collection.
 
 ## Architecture (package `logagent/`, Python 3.11+, stdlib only)
 
@@ -26,22 +30,22 @@ what to do. It has a local web dashboard and runs on **a model the owner trained
 |---|---|
 | `collectors/windows.py` | `wevtutil qe ... /f:RenderedXml` → Events. Security channel needs admin. |
 | `collectors/textlogs.py` | syslog (RFC3164/5424/ISO), journald JSON, app logs (text or JSON lines, tracebacks folded) |
-| `collectors/sources.py` | source specs from config → events; `files` type = folder/glob/file with per-file `detect_format()`; files >100 MB read from the newest 100 MB; window `all`; `ssh` type runs journalctl + a read-only health probe (disk, mem, temps, `vcgencmd get_throttled`, failed units) on Pi/Jetson |
+| `collectors/sources.py` | source specs from config → events; `files` type = folder/glob/file with per-file `detect_format()`; files >100 MB read from the newest 100 MB; window `all`; local only (an `ssh` type in old configs raises a clear error) |
 | `signals.py` | ~50 rules (id, score, why, action) + `NOISE_RULES` (negative score = suppress). Rules support `event_ids`, `providers`, `pattern`, `exclude`, `max_severity`, `min_count` |
 | `analysis.py` | template masking → clusters → score (rule + severity + burst + novelty vs `data/baseline.json`) |
 | `llm.py` | providers `openai` (any OpenAI-compatible), `ollama`, `anthropic` (unused per owner), `none`. Two modes: whole-report JSON, or `mode="triage"` (one call per pattern, which is what the owner's model is trained on). `TRIAGE_PROMPT` + `triage_input()` are shared by training and inference, so **change them only together with a retrain** |
-| `locations.py` | dashboard "Log locations": `system_info()` (OS, usable source types), `validate_source()` (also guards ssh host/glob/unit injection), `save_sources()` (rewrites only the live `[[sources]]` tables of logagent.toml, verifies with tomllib, keeps `.bak`), `discover()` (per-OS log folders + journal + Event Log + `~/.ssh/config` hosts, time-bounded), `browse()` (files/units/channels to pick), `test_source()` |
+| `locations.py` | dashboard "Log locations": `system_info()` (OS, usable source types), `validate_source()` (also guards unit/channel injection), `save_sources()` (rewrites only the live `[[sources]]` tables of logagent.toml, verifies with tomllib, keeps `.bak`), `discover()` (per-OS log folders + journal + Event Log, time-bounded), `browse()` (files/units/channels to pick), `test_source()` |
 | `summary.py` | whole-log summary: `guess_origin()` (OS that produced the log, from source types + message evidence), `build_digest()` (compact stats/timeline/patterns, never raw logs), `heuristic_summary()` fallback |
 | `knowledge.py` | offline reference: ATT&CK techniques/tactics, `RULE_ATTACK` (rule → techniques), Windows event IDs, Sysmon, logon types, NTSTATUS codes, Linux message patterns, programs/fields. `STRONG_*` decides which entries are *mapped* vs context-only |
 | `explain.py` | "Explain this event": token highlighting, anatomy, decoded fields, references, `commands()` = native commands per origin OS (verified to run on journald and file sources) |
 | `iocs.py` | indicator extraction (ip with scope, domain with TLD allowlist, url, email, md5/sha1/sha256, user); `Collector` runs on every event during clustering; `from_clusters()` rebuilds approximate ones for old scans |
 | `tools.py` | tool detection: `CATALOG` signatures (attacker / lolbin / scanner / remote-access / tunnel / miner) matched on every event; `boost()` raises scores of tool-bearing patterns; `model_pass()` asks `summary_model` to name the rest and drops anything whose evidence isn't in the log; duplicates of catalog hits become `also` aliases |
-| `logview.py` | jump-to-event: resolves `c/<key>/<i>`, `t/<tool>/<use>`, `i/<ioc>` refs from the saved scan (never client paths) and returns context from files (byte offsets), `.gz` (line numbers), journald cursors (local or over ssh) or Windows record IDs |
+| `logview.py` | jump-to-event: resolves `c/<key>/<i>`, `t/<tool>/<use>`, `i/<ioc>` refs from the saved scan (never client paths) and returns context from files (byte offsets), `.gz` (line numbers), journald cursors or Windows record IDs |
 | `labelqueue.py` | label queue: unlabeled patterns across scans, deduped by cluster key, prioritised; labels are saved via `feedback.save()` on the newest scan with the pattern |
 | `engine.py` | scan pipeline; saves `data/scans/<id>.json` (findings + up to 300 lower-scored "others" for training negatives) |
 | `feedback.py` | owner's 👍/👎 + importance labels → `data/feedback.json` (training gold) |
 | `server.py` + `static/index.html` | dashboard on 127.0.0.1:8765; `/api/status` (model health, admin, schedule), scheduled scans (`schedule = "6h"`); `/api/system`, `/api/sources` (GET/POST), `/api/sources/test`, `/api/discover`, `/api/browse`; `/api/scan` takes `specs` (picked files/units) + `summarize` + `label`; `/api/reference`, `/api/explain` (`ask` + `level` = learning/analyst uses `summary_model`), `/api/pivot?type=&value=`. File-browsing endpoints are refused when the dashboard is bound beyond localhost |
-| `train/synth.py`, `train/dataset.py` | synthetic Pi/Jetson/Linux/app scenarios + scans + feedback → `train_data/{train,eval}.jsonl` (`python -m logagent dataset`) |
+| `train/synth.py`, `train/dataset.py` | synthetic scenarios (still Pi/Jetson-flavoured hosts: rebalance to general Linux/Windows/app hosts at the next retrain) + scans + feedback → `train_data/{train,eval}.jsonl` (`python -m logagent dataset`) |
 | `trainer/` | **separate venv** `.venv-train` (Python 3.12, torch cu128, transformers 5.x, peft, bitsandbytes). `train.py` (QLoRA, custom loop, fits 8 GB at `--batch-tokens 1024`), `evaluate.py`, `serve.py` (OpenAI-compatible on :8081, CUDA + 4-bit) |
 | `start-logagent.ps1` + `Start logagent*.bat` | launcher: starts serve.py if an adapter exists, waits for it, starts dashboard; `-Admin` self-elevates |
 | `start-logagent.sh` | same for Linux/macOS; Ctrl+C/TERM/HUP stops the dashboard and the model it started |
@@ -73,7 +77,7 @@ wanted: `data/` (scan history with raw log text from the desktop, baseline, owne
      not 3.14). The first run downloads ~8 GB of base weights to `~/.cache/huggingface`.
    - No NVIDIA GPU / small GPU: **next step 1 below** (merge + GGUF → Ollama/llama.cpp, which runs on CPU or Apple/AMD).
      Until then set `[llm] provider = "none"` and the dashboard runs on rules alone.
-3. Update `logagent.toml` sources for the laptop (Windows channels, Pi/Jetson SSH hosts). On Linux/macOS
+3. Update `logagent.toml` sources for the laptop (or use LOG LOCATIONS in the dashboard). On Linux/macOS
    use `./start-logagent.sh`.
 
 **Laptop status (2026-11-06, done):** Fedora 44, RTX 4060 Laptop 8 GB, driver CUDA 13.4. `.venv-train` built with
@@ -107,8 +111,10 @@ now forbids lock-yourself-out advice (it once suggested stopping sshd over SSH).
 3. **Retrain loop:** `python -m logagent dataset` → `trainer/train.py` → `trainer/evaluate.py` against the
    previous version; only switch `serve.py` to the new adapter if eval on owner-labeled (`src=you`) rows
    improves. Consider a dashboard "Models" tab showing versions + eval scores.
-4. **Connect real devices:** owner hasn't given Pi/Jetson SSH addresses yet (`type="ssh"`, `device="pi"|"jetson"`,
-   key auth via `ssh-copy-id`). The `ssh` collector and health probe are unit-tested but not yet run against real hardware.
+4. ~~Connect Pi/Jetson devices~~: dropped, out of scope (see Owner's decisions). The `ssh` source type, health
+   probe and `~/.ssh/config` discovery were removed on 2026-11-06. Still to do at the next retrain: rebalance
+   `train/synth.py` away from Pi/Jetson hosts (the current adapter was trained partly on them). Detection rules and
+   reference entries for Pi/Jetson *messages* stay: they only fire on matching lines in logs the user analyzes.
 5. **Precision in model text:** facts in "why" are generic ("Seen N times on host"). Training targets could
    include exact first/last UTC, rate, event ID, and the specific value (IP, unit, stop code) from samples,
    which needs dataset changes + retrain. The dashboard already shows these fields precisely.

@@ -14,7 +14,6 @@ from collections import deque
 from datetime import datetime, timezone
 
 from .collectors import windows
-from .collectors.sources import _ssh_cmd
 
 MAX_LINE = 2000
 CHUNK = 64 * 1024
@@ -40,7 +39,7 @@ def resolve(scan: dict, ref: str) -> dict:
     except (StopIteration, IndexError, KeyError, ValueError) as exc:
         raise ViewError("that event isn't in this scan") from exc
     if not loc:
-        raise ViewError("no position was recorded for this event (scans from before this feature, or SSH app logs)")
+        raise ViewError("no position was recorded for this event (scans from before this feature)")
     return loc
 
 
@@ -96,13 +95,10 @@ def _gz_lines(path: str, line: int, before: int, after: int) -> dict:
     return {"lines": [{"n": n, "text": _clip(r)} for n, r in prev] + out, "at_start": not prev or prev[0][0] == 1}
 
 
-# ---------------------------------------------------------------- journal (local or over ssh)
-def _journal(cursor: str, before: int, after: int, ssh_spec: dict | None) -> dict:
+# ---------------------------------------------------------------- journal (this machine)
+def _journal(cursor: str, before: int, after: int) -> dict:
     def run(extra: list[str], n: int) -> list[dict]:
         cmd = ["journalctl", f"--cursor={cursor}", "-o", "json", "--no-pager", "-n", str(n), *extra]
-        if ssh_spec:
-            import shlex
-            cmd = _ssh_cmd(ssh_spec) + [" ".join(shlex.quote(c) for c in cmd)]
         try:
             p = subprocess.run(cmd, capture_output=True, timeout=60)
         except (OSError, subprocess.TimeoutExpired) as exc:
@@ -180,15 +176,10 @@ def view(scan: dict, ref: str, before: int = 25, after: int = 25, at: str | None
     before, after = max(0, min(int(before), 500)), max(0, min(int(after), 500))
     try:
         if loc.get("cursor"):
-            ssh_spec = None
             if loc.get("ssh"):
-                ssh_spec = next((s for s in scan.get("sources", []) if s.get("type") == "ssh" and
-                                 (s.get("name") == loc["ssh"] or s.get("host") == loc["ssh"])), None)
-                if not ssh_spec:
-                    raise ViewError("the SSH source for this event is no longer in the scan")
-            res = _journal(at or loc["cursor"], before, after, ssh_spec)
-            res.update(kind="journal", title=("journal on " + loc["ssh"]) if loc.get("ssh") else "systemd journal (this machine)",
-                       target=loc["cursor"])
+                raise ViewError("this event came from a remote SSH source; logagent now reads logs on this machine only")
+            res = _journal(at or loc["cursor"], before, after)
+            res.update(kind="journal", title="systemd journal (this machine)", target=loc["cursor"])
         elif loc.get("record"):
             res = _win(loc, int(at or loc["record"]), before, after)
             res.update(kind="windows", title=loc.get("file") or f"Windows Event Log: {loc.get('channel', '?')}",

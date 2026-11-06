@@ -12,7 +12,7 @@ import urllib.error
 import urllib.request
 
 SYSTEM_PROMPT = """You are a meticulous systems and security analyst reviewing logs for one person's \
-machines: a Windows PC, Linux boxes, Raspberry Pis, NVIDIA Jetsons, and their own applications.
+own machines and the log files they bring to it: Windows, Linux and macOS systems and their own applications.
 
 You get pre-clustered log findings (already filtered and scored by rules). Your job is to nitpick: \
 surface the few things this person would genuinely want to know, and explain them plainly.
@@ -268,7 +268,7 @@ NEXT STEPS:
 (up to 4 lines)
 
 Commands must fit the OS that produced the log (origin_os): journalctl/systemctl on Linux, PowerShell or \
-Event Viewer on Windows, `log show`/Console on macOS, vcgencmd on a Raspberry Pi. If origin_os differs from \
+Event Viewer on Windows, `log show`/Console on macOS. If origin_os differs from \
 viewer_os, say how to get there first (for example `ssh <user>@<host>` using the host name from the digest, or an \
 exported .evtx opened on Windows). If origin_os is unknown, say so and do not guess OS-specific commands.
 Prefer read-only checks. If a step changes the system, say exactly what it changes (e.g. `sudo usermod -L <user>` \

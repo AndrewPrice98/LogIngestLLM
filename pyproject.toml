@@ -1,7 +1,7 @@
 [project]
 name = "logagent"
 version = "0.1.0"
-description = "Ingest Windows/Linux/Pi/Jetson/app logs, surface the events worth your attention, summarize with your own LLM"
+description = "Local-only log analyzer and analyst co-pilot that runs on your own LLM"
 requires-python = ">=3.11"
 dependencies = []
 

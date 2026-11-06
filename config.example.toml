@@ -40,21 +40,6 @@ name = "Defender"
 type = "windows"
 channels = ["Microsoft-Windows-Windows Defender/Operational"]
 
-# A Raspberry Pi over SSH (key-based login: ssh-copy-id pi@raspberrypi.local)
-# [[sources]]
-# name = "pi"
-# type = "ssh"
-# host = "pi@raspberrypi.local"
-# device = "pi"                 # pi | jetson | linux  (pi adds under-voltage/throttle checks)
-# logs = ["/home/pi/myapp/*.log"]
-
-# A Jetson
-# [[sources]]
-# name = "jetson"
-# type = "ssh"
-# host = "mreyes@jetson.local"
-# device = "jetson"
-
 # Any folder, glob or file; the format is detected per file (syslog, journald JSON, app/JSON lines, .evtx)
 # [[sources]]
 # name = "var log"

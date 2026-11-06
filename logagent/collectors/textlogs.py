@@ -1,7 +1,7 @@
 """Text-based log parsers: syslog (RFC3164/RFC5424), journald JSON, and app logs.
 
 All parsers take an iterable of lines so the same code works for local files,
-stdin, and output streamed over SSH from a Pi/Jetson.
+stdin, and command output (journalctl).
 """
 from __future__ import annotations
 

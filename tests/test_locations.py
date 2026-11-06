@@ -42,7 +42,7 @@ def test_save_sources_keeps_rest_of_file(tmp_path):
     p.write_text(CONFIG)
     cfg = {"_path": str(p), "sources": []}
     new = [{"name": "var log", "type": "files", "path": "/var/log"},
-           {"name": "pi", "type": "ssh", "host": "pi@raspberrypi.local", "device": "pi", "logs": ["/home/pi/*.log"]}]
+           {"name": "nginx", "type": "journald", "units": ["nginx.service"]}]
     saved = locations.save_sources(cfg, new)
     text = p.read_text()
     data = tomllib.loads(text)
@@ -66,10 +66,8 @@ def test_save_sources_empty_and_missing_file(tmp_path):
     ({"name": "x", "type": "nope"}, "type must be"),
     ({"name": "", "type": "journald"}, "name is required"),
     ({"name": "x", "type": "files"}, "path is required"),
-    ({"name": "x", "type": "ssh", "host": "-oProxyCommand=sh"}, "host must look like"),
-    ({"name": "x", "type": "ssh", "host": "pi@h; rm -rf /"}, "host must look like"),
-    ({"name": "x", "type": "ssh", "host": "pi@h", "logs": ["/x/*.log; reboot"]}, "logs: not allowed"),
-    ({"name": "x", "type": "ssh", "host": "pi@h", "port": "99999"}, "port must be"),
+    ({"name": "x", "type": "ssh", "host": "pi@h"}, "type must be"),  # remote collection is out of scope
+    ({"name": "x", "type": "files", "path": "a\nb"}, "path is not valid"),
     ({"name": "x", "type": "journald", "units": ["a.service", "$(id)"]}, "units: not allowed"),
 ])
 def test_validate_rejects(spec, msg):
@@ -78,10 +76,11 @@ def test_validate_rejects(spec, msg):
 
 
 def test_validate_cleans_and_dedupes():
-    s = locations.validate_source({"name": " web ", "type": "ssh", "host": "pi@pi.local", "port": "2222",
-                                   "logs": "/a/*.log, /b.log", "junk": 1, "enabled": True})
-    assert s == {"name": "web", "type": "ssh", "host": "pi@pi.local", "device": "linux", "port": 2222,
-                 "logs": ["/a/*.log", "/b.log"]}
+    s = locations.validate_source({"name": " web ", "type": "journald", "units": "nginx.service, php-fpm.service",
+                                   "junk": 1, "enabled": True, "host": "x"})
+    assert s == {"name": "web", "type": "journald", "units": ["nginx.service", "php-fpm.service"]}
+    f = locations.validate_source({"name": "app", "type": "files", "path": "~/app/logs", "format": "syslog", "enabled": False})
+    assert f == {"name": "app", "type": "files", "path": "~/app/logs", "format": "syslog", "enabled": False}
     with pytest.raises(ValueError, match="two sources"):
         locations.validate_sources([{"name": "A", "type": "journald"}, {"name": "a", "type": "journald"}])
 
@@ -165,3 +164,9 @@ def test_run_scan_keeps_label_and_summarizes(tmp_path):
     assert scan["label"] == "pi-syslog.log, myapp.log"
     assert scan["summary"]["by"] == "rules" and scan["summary"]["text"].startswith("WHAT:")
     assert scan["stats"]["per_source"] == {"pi-syslog.log": 105, "myapp.log": 36}
+
+
+def test_ssh_sources_are_refused_with_a_clear_message():
+    from logagent.collectors.sources import SourceError
+    with pytest.raises(SourceError, match="Copy the logs here"):
+        list(collect({"type": "ssh", "host": "pi@h"}, parse_window("24h")))

@@ -77,6 +77,11 @@ BUILTIN_RULES: list[Rule] = [
       "New services are how drivers, updaters and also malware get persistence.",
       "Check the service name and binary path; unknown paths in Temp/AppData are red flags.",
       event_ids=("7045", "4697")),
+    R("pf_user_writable_run", "Program ran from a user-writable folder", "security", 65,
+      "Prefetch shows a program ran from Public, Temp, Downloads or AppData: where dropped malware and tools run from.",
+      "Check the file at that path (hash it, look it up) and what the user was doing at the run times.",
+      providers=("Prefetch",), pattern=r"\\(Users\\Public|AppData\\Local\\Temp|Windows\\Temp|Downloads|"
+                                        r"AppData\\Roaming|\$Recycle\.Bin|PerfLogs)\\"),
     R("win_defender_threat", "Microsoft Defender detected a threat", "security", 90,
       "Defender found malware or a PUA.", "Open Windows Security > Protection history and confirm it was quarantined.",
       event_ids=("1116", "1117", "1006", "1015")),

@@ -51,7 +51,7 @@ select:focus,input:focus,textarea:focus{outline:1px solid var(--accent);border-c
 .run{width:100%;margin-top:8px;background:var(--accent);color:#031015;border:0;padding:7px;font-weight:700;letter-spacing:.06em;cursor:pointer;border-radius:2px}
 .open{width:100%;background:transparent;color:var(--accent);border:1px solid var(--accent);padding:9px;font-weight:700;letter-spacing:.06em;cursor:pointer;border-radius:2px}
 .open:hover{background:rgba(54,194,220,.1)}
-body.dropping::after{content:'drop log files to analyze them';position:fixed;inset:12px;z-index:100;display:flex;align-items:center;justify-content:center;
+body.dropping::after{content:'drop log files or folders to analyze them';position:fixed;inset:12px;z-index:100;display:flex;align-items:center;justify-content:center;
   border:2px dashed var(--accent);border-radius:6px;background:rgba(5,10,14,.85);color:var(--accent);font:700 22px var(--mono);letter-spacing:.06em;pointer-events:none}
 .run:disabled{background:var(--line2);color:var(--muted);cursor:default}
 .chk{display:flex;gap:6px;align-items:center;margin-top:8px;color:var(--muted);cursor:pointer}
@@ -253,7 +253,9 @@ tr.dis td{color:var(--dim)}
     <div class="sec">
       <button class="open" id="openBtn" title="Pick a log file on this computer (.evtx, .log, syslog, JSON…). It is copied into the app's own folder and scanned there; nothing leaves your machine.">OPEN LOG FILE…</button>
       <input type="file" id="fileIn" multiple hidden>
-      <div class="lbl" style="margin-top:6px">or drag log files anywhere onto this window</div>
+      <button class="open" id="folderBtn" style="margin-top:6px" title="Pick a whole folder, e.g. a copied C:\Windows\Prefetch or a folder of exported .evtx files. Log files in it (and its subfolders) are copied into the app's own folder and scanned together.">OPEN FOLDER…</button>
+      <input type="file" id="folderIn" webkitdirectory multiple hidden>
+      <div class="lbl" style="margin-top:6px">or drag log files or folders anywhere onto this window</div>
     </div>
     <div class="sec">
       <div class="h"><span>Sources <span id="srcCount"></span></span><button class="mini" id="locBtn" title="Add, edit, discover, and pick individual log files">log locations</button></div>
@@ -1602,25 +1604,49 @@ $('#scanBtn').addEventListener('click', async () => {
 });
 $('#locBtn').addEventListener('click', () => openLocations());
 
-// open log files from the browser: the picker and drag-and-drop both copy the file into data_dir/uploads, then scan it
-async function openFiles(files) {
+// open log files from the browser: the picker and drag-and-drop both copy the file into data_dir/uploads, then scan it.
+// A folder (or a big pile of files) is uploaded into one batch folder and scanned as one source.
+const LOGLIKE = /(\.log([.-]\d+)?|\.log\.\d+\.gz|\.log\.gz|\.out|\.err|\.txt|\.jsonl?|\.evtx|\.xml|\.pf)$|^(messages|syslog|secure|auth|kern|daemon|maillog|mail|cron|dmesg|boot|user|debug|system|install|dpkg|alternatives|faillog)(\.log)?([.-]\d+)?(\.gz)?$/i;
+async function openFiles(files, folder) {
+  if (folder) {
+    const all = files.length;
+    files = files.filter(f => LOGLIKE.test(f.name));
+    if (!files.length) { $('#joblog').textContent = `${folder}: no log files among its ${all} files`; return; }
+  }
   if (!files.length) return;
-  const log = $('#joblog'), paths = [];
+  const log = $('#joblog'), paths = [], batch = folder || files.length > 20 ?
+    [...crypto.getRandomValues(new Uint8Array(8))].map(b => b.toString(16).padStart(2, '0')).join('') : '';
+  let dir = '';
   for (const [i, f] of files.entries()) {
     log.textContent = `loading ${f.name} (${i + 1}/${files.length}, ${fmtBytes(f.size)})…`;
     let r;
     try {
       r = await (await fetch('/api/upload', {method: 'POST', body: f,
-        headers: {'content-type': 'application/octet-stream', 'x-filename': encodeURIComponent(f.name)}})).json();
+        headers: {'content-type': 'application/octet-stream', 'x-filename': encodeURIComponent(f.name), ...(batch ? {'x-batch': batch} : {})}})).json();
     } catch (e) { r = {error: String(e)}; }
     if (r.error) { log.textContent = `${f.name}: ${r.error}`; return; }
-    paths.push(r.path);
+    paths.push(r.path); dir = r.dir;
   }
-  const r = await analyzePicked({type: 'files'}, 'files', paths, 'all', $('#useLlm').checked, $('#summarize').checked);
+  const r = batch ? await analyzePicked({type: 'files', name: folder || `${files.length} files`, path: dir}, 'whole', [], 'all', $('#useLlm').checked, $('#summarize').checked)
+    : await analyzePicked({type: 'files'}, 'files', paths, 'all', $('#useLlm').checked, $('#summarize').checked);
   if (r?.error) log.textContent = r.error;
+}
+// a dropped folder arrives as an entry to walk, not as files
+async function entryFiles(entry, out) {
+  if (entry.isFile) { out.push(await new Promise((ok, no) => entry.file(ok, no))); return out; }
+  const reader = entry.createReader();
+  for (let batch; (batch = await new Promise((ok, no) => reader.readEntries(ok, no))).length;)
+    for (const e of batch) await entryFiles(e, out);
+  return out;
 }
 $('#openBtn').addEventListener('click', () => $('#fileIn').click());
 $('#fileIn').addEventListener('change', e => { openFiles([...e.target.files]); e.target.value = ''; });
+$('#folderBtn').addEventListener('click', () => $('#folderIn').click());
+$('#folderIn').addEventListener('change', e => {
+  const files = [...e.target.files];
+  if (files.length) openFiles(files, (files[0].webkitRelativePath || '').split('/')[0] || 'folder');
+  e.target.value = '';
+});
 let dragDepth = 0;
 const hasFiles = e => [...(e.dataTransfer?.types || [])].includes('Files');
 addEventListener('dragenter', e => { if (hasFiles(e)) { e.preventDefault(); dragDepth++; document.body.classList.add('dropping'); } });
@@ -1629,7 +1655,14 @@ addEventListener('dragleave', e => { if (hasFiles(e) && --dragDepth <= 0) { drag
 addEventListener('drop', e => {
   if (!hasFiles(e)) return;
   e.preventDefault(); dragDepth = 0; document.body.classList.remove('dropping');
-  openFiles([...e.dataTransfer.files]);
+  const entries = [...e.dataTransfer.items || []].map(i => i.webkitGetAsEntry?.()).filter(Boolean);
+  const dirs = entries.filter(x => x.isDirectory);
+  if (!dirs.length) { openFiles([...e.dataTransfer.files]); return; }
+  (async () => {
+    const files = [];
+    for (const x of entries) await entryFiles(x, files);
+    openFiles(files, dirs.length === 1 && entries.length === 1 ? dirs[0].name : `${entries.length} dropped items`);
+  })().catch(err => { $('#joblog').textContent = `could not read the dropped folder: ${err}`; });
 });
 $('#qBtn').addEventListener('click', () => openQueue());
 $('#mBtn').addEventListener('click', () => openModels());

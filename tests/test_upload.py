@@ -44,3 +44,14 @@ def test_upload_needs_the_custom_header(base):
     # what a plain cross-site form could send: no x-filename, so it's refused and nothing is written
     code, _ = _post(url + "/api/upload", b"x", {"content-type": "application/octet-stream"})
     assert code == 403 and not (tmp / "data" / "uploads").exists()
+
+
+def test_folder_upload_lands_in_one_batch_folder(base):
+    url, tmp = base
+    h = {"content-type": "application/octet-stream", "x-batch": "0a1b2c3d4e5f6071"}
+    a = _post(url + "/api/upload", b"one", dict(h, **{"x-filename": "NOTEPAD.EXE-0A1B2C3D.pf"}))[1]
+    b = _post(url + "/api/upload", b"two", dict(h, **{"x-filename": "NOTEPAD.EXE-0A1B2C3D.pf"}))[1]  # same name, other subfolder
+    assert a["dir"] == b["dir"] and Path(a["dir"]).name == "batch-0a1b2c3d4e5f6071"
+    assert b["name"] == "NOTEPAD.EXE-0A1B2C3D-2.pf" and Path(b["path"]).read_bytes() == b"two"
+    code, _ = _post(url + "/api/upload", b"x", dict(h, **{"x-filename": "a.log", "x-batch": "../../etc"}))
+    assert code == 400

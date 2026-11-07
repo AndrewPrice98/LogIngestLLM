@@ -14,7 +14,7 @@ import subprocess
 from collections import deque
 from datetime import datetime, timezone
 
-from .collectors import windows
+from .collectors import prefetch, windows
 
 MAX_LINE = 2000
 CHUNK = 64 * 1024
@@ -188,6 +188,18 @@ def view(scan: dict, ref: str, before: int = 25, after: int = 25, at: str | None
             res = _win(loc, int(at or loc["record"]), before, after)
             res.update(kind="windows", title=loc.get("file") or f"Windows Event Log: {loc.get('channel', '?')}",
                        target=int(loc["record"]))
+        elif loc.get("prefetch"):  # a parsed binary file: show what it records, with this run time marked
+            path = loc["file"]
+            if not os.path.isfile(path):
+                raise ViewError(f"{path} no longer exists (moved or deleted)")
+            try:
+                lines = prefetch.describe(path, int(loc["prefetch"]))
+            except prefetch.PrefetchError as exc:
+                raise ViewError(str(exc)) from exc
+            for l in lines:
+                l.setdefault("hit", False)
+                l["at"] = str(l["n"])
+            return {"lines": lines, "at_start": True, "at_end": True, "kind": "prefetch", "title": path, "target": None, "target_line": None}
         elif loc.get("file"):
             path = loc["file"]
             if not os.path.isfile(path):

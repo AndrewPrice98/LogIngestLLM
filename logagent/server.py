@@ -4,6 +4,7 @@ from __future__ import annotations
 import ctypes
 import json
 import os
+import re
 import threading
 import time
 import traceback
@@ -258,9 +259,16 @@ def make_handler(cfg: dict, job: Job, sched: dict):
                 return self._send(411, {"error": "content-length required"})
             if n > MAX_UPLOAD:
                 return self._send(413, {"error": f"file is over {MAX_UPLOAD // 2**30} GB; open it by path instead"})
-            d = Path(cfg["data_dir"]) / "uploads" / f"{datetime.now():%Y%m%d-%H%M%S}-{os.urandom(2).hex()}"
+            batch = self.headers.get("x-batch") or ""  # files from one folder go into one folder, scanned as a whole
+            if batch and not re.fullmatch(r"[0-9a-f]{8,32}", batch):
+                return self._send(400, {"error": "bad batch id"})
+            d = Path(cfg["data_dir"]) / "uploads" / (f"batch-{batch}" if batch else
+                                                     f"{datetime.now():%Y%m%d-%H%M%S}-{os.urandom(2).hex()}")
             d.mkdir(parents=True, exist_ok=True)
-            dest = d / name
+            dest, k = d / name, 1
+            while dest.exists():  # same name from two subfolders
+                k += 1
+                dest = d / f"{Path(name).stem}-{k}{Path(name).suffix}"
             with open(dest, "wb") as fh:
                 left = n
                 while left > 0:
@@ -272,7 +280,7 @@ def make_handler(cfg: dict, job: Job, sched: dict):
             if left:
                 dest.unlink(missing_ok=True)
                 return self._send(400, {"error": "upload was cut short"})
-            return self._send(200, {"path": str(dest.resolve()), "name": name, "bytes": n})
+            return self._send(200, {"path": str(dest.resolve()), "dir": str(d.resolve()), "name": dest.name, "bytes": n})
 
         def do_POST(self):
             if (self._host_ok() and urlparse(self.path).path == "/api/upload" and self.headers.get("x-filename")

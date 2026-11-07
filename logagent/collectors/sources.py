@@ -5,7 +5,7 @@ Source spec dict keys:
   name:    label shown in the UI (optional)
   since:   e.g. "24h", "7d", "all" (optional; falls back to the scan window)
   files:   path = "/var/log" | "~/app/logs/*.log" | "C:/logs/app.log" (folder, glob or file),
-           format = "auto" | "syslog" | "journal" | "app" | "evtx" (auto = detect per file)
+           format = "auto" | "syslog" | "journal" | "app" | "evtx" | "prefetch" (auto = detect per file)
   windows: channels = ["System", "Application", "Security"]
   evtx:    path = "C:/exports/System.evtx"  (or .xml)
   journald:units = ["nginx.service"] (optional)
@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Iterator
 
 from ..model import Event, WARNING, ERR, CRIT, INFO
-from . import windows
+from . import prefetch, windows
 from .textlogs import Line, parse_syslog, parse_journal_json, parse_app_log, is_syslog_line
 
 
@@ -42,7 +42,7 @@ MAX_FILE_BYTES = 100 * 1024 * 1024   # larger files are read from the end (newes
 # Names that are logs even without a .log suffix (/var/log/messages, rotated messages-20261101, ...)
 _LOG_NAME = re.compile(r"^(messages|syslog|secure|auth|kern|daemon|maillog|mail|cron|dmesg|boot|user|debug|"
                        r"system|install|dpkg|alternatives|faillog)(\.log)?([.-]\d+)?(\.gz)?$", re.I)
-_LOG_SUFFIX = re.compile(r"(\.log([.-]\d+)?|\.log\.\d+\.gz|\.log\.gz|\.out|\.err|\.txt|\.jsonl?|\.evtx)$", re.I)
+_LOG_SUFFIX = re.compile(r"(\.log([.-]\d+)?|\.log\.\d+\.gz|\.log\.gz|\.out|\.err|\.txt|\.jsonl?|\.evtx|\.pf)$", re.I)
 
 
 def parse_window(s: str | None, default: timedelta = timedelta(hours=24)) -> timedelta:
@@ -112,7 +112,7 @@ def is_log_file(path: str) -> bool:
     return bool(_LOG_SUFFIX.search(name) or _LOG_NAME.match(name))
 
 
-def _files(pattern: str, max_files: int = 500) -> list[str]:
+def _files(pattern: str, max_files: int = 1500) -> list[str]:  # a Prefetch folder holds up to 1024 files
     """A file, a glob, or a folder (log-looking files up to two levels down)."""
     pattern = os.path.expandvars(os.path.expanduser(pattern))
     if os.path.isdir(pattern):
@@ -130,10 +130,12 @@ def _files(pattern: str, max_files: int = 500) -> list[str]:
 
 
 def detect_format(path: str) -> str:
-    """Best guess at a file's format: evtx | journal | syslog | app | binary."""
+    """Best guess at a file's format: evtx | prefetch | journal | syslog | app | binary."""
     low = path.lower()
     if low.endswith(".evtx"):
         return "evtx"
+    if low.endswith(".pf") and prefetch.is_prefetch(path):
+        return "prefetch"
     try:
         if low.endswith(".gz"):
             with gzip.open(path, "rb") as fh:
@@ -167,6 +169,12 @@ def _collect_file(path: str, fmt: str, host: str, cutoff: datetime, warn, max_ev
         return
     if fmt == "evtx":
         yield from _in_file(windows.collect(path=path, max_events=max_events, warn=warn), path)
+        return
+    if fmt == "prefetch":  # like .evtx: a record of what happened, so not cut to the scan window
+        try:
+            yield from prefetch.read_prefetch(path, host, warn)
+        except prefetch.PrefetchError as exc:
+            warn(f"skipped {path}: {exc}")
         return
     lines = _read_lines(path, warn)
     if fmt == "journal":

@@ -22,7 +22,7 @@ from .collectors import windows
 from .collectors.sources import (SourceError, _files, collect, detect_format, is_log_file, parse_window)
 
 TYPES = ("files", "journald", "syslog", "app", "windows", "evtx")
-FORMATS = ("auto", "syslog", "journal", "app", "evtx")
+FORMATS = ("auto", "syslog", "journal", "app", "evtx", "prefetch")
 _SAFE_UNIT = re.compile(r"^[\w@.:\\-]{1,200}$")
 _SAFE_CHANNEL = re.compile(r"^[\w ./-]{1,200}$")
 
@@ -246,7 +246,7 @@ def save_sources(cfg: dict, sources: list) -> list[dict]:
 # ---------------------------------------------------------------- discovery
 _SKIP_DIRS = {"node_modules", ".git", "__pycache__", "site-packages", "venv", ".venv", ".venv-train", "proc", "sys",
               "dev", "Cache", "cache", "GPUCache", "Code Cache", "CacheStorage", "IndexedDB", "blob_storage"}
-_DISCOVER_FILE = re.compile(r"(\.log|\.log[.-]\d+|\.log\.\d+\.gz|\.log\.gz|\.evtx)$", re.I)
+_DISCOVER_FILE = re.compile(r"(\.log|\.log[.-]\d+|\.log\.\d+\.gz|\.log\.gz|\.evtx|\.pf)$", re.I)
 
 
 def _looks_like_log(dirpath: str, name: str) -> bool:
@@ -361,6 +361,10 @@ def discover(cfg: dict) -> dict:
         add({"name": "Defender", "type": "windows", "channels": ["Microsoft-Windows-Windows Defender/Operational"]},
             "malware detections")
         env = os.environ
+        pf = os.path.join(env.get("SystemRoot", r"C:\Windows"), "Prefetch")
+        if os.path.isdir(pf):
+            add({"name": "Prefetch (program runs)", "type": "files", "path": pf, "format": "prefetch"},
+                "which programs ran and when; needs admin")
         _walk_logs([env.get("ProgramData", r"C:\ProgramData"), env.get("LOCALAPPDATA", ""), env.get("APPDATA", ""),
                     os.path.join(env.get("SystemRoot", r"C:\Windows"), "Logs")], 3, 4.0, found)
         _walk_logs([str(home / d) for d in ("Desktop", "Documents", "source", "Projects")], 3, 2.0, found)

@@ -34,6 +34,7 @@ def bar(label: str, value: float, color: str) -> str:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--browser", default="/usr/bin/microsoft-edge")
+    ap.add_argument("--copilot", help="override the co-pilot checks line, e.g. 'v1 103/108 → v2 109/110'")
     a = ap.parse_args()
     promo = latest("promote-*.json") or {}
     base = json.loads((MODELS / "eval-base.json").read_text()) if (MODELS / "eval-base.json").exists() else None
@@ -51,7 +52,7 @@ def main():
     for p in sorted(MODELS.glob("copilot-eval-model-*.json")):
         r = json.loads(p.read_text())
         reports[r.get("adapter")] = f"{r['passed']}/{r['total']}"
-    copilot = " → ".join(f"{v}" for v in reports.values()) or "see the MODELS page"
+    copilot = a.copilot or " → ".join(f"{v}" for v in reports.values()) or "see the MODELS page"
     checks = sum(s.get("total", 0) for s in (latest("copilot-eval-model-*.json") or {}).get("scenarios", []))
     train = json.loads((ROOT / "models" / names[1] / "train_info.json").read_text()) if (ROOT / "models" / names[1] / "train_info.json").exists() else {}
     html = (HERE / "carousel.html").read_text()

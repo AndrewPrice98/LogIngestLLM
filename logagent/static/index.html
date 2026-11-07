@@ -362,7 +362,9 @@ async function status() {
   const m = s.model || {};
   $('#mDot').className = 'dot ' + m.state;
   $('#mName').textContent = s.llm.provider === 'none' ? 'disabled' : `${s.llm.model || s.llm.provider}`;
-  $('#mDetail').textContent = m.state === 'online' ? ` ${m.latency_ms}ms` + (s.llm.mode ? ` · ${s.llm.mode}` : '') : m.state === 'offline' ? ' OFFLINE → rules only' : '';
+  const where = s.llm.provider === 'bundled' ? ' built-in' : m.latency_ms != null ? ` ${m.latency_ms}ms` : '';
+  $('#mDetail').textContent = m.state === 'online' ? where + (s.llm.mode ? ` · ${s.llm.mode}` : '') :
+    m.state === 'starting' ? ' loading…' : m.state === 'offline' ? ' OFFLINE → rules only' : '';
   $('#mDetail').title = m.detail || '';
   $('#adm').textContent = s.admin ? (sys.os === 'Windows' ? 'admin' : 'root') : sys.os === 'Windows' ? 'user (Security log skipped)' : sys.journal_system === false ? 'user (system journal not readable)' : 'user';
   $('#adm').style.color = s.admin || sys.os !== 'Windows' && sys.journal_system !== false ? 'var(--ok)' : 'var(--warn)';

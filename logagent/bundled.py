@@ -125,6 +125,16 @@ def pick_device(listing: str) -> str | None:
     return max(devs, key=rank)[0]
 
 
+def _die_with_parent() -> None:
+    """Linux: the kernel stops the engine if LogIngestLLM itself dies, even from kill -9 (no orphaned GPU use)."""
+    try:
+        import ctypes
+        import signal
+        ctypes.CDLL("libc.so.6", use_errno=True).prctl(1, signal.SIGTERM)  # PR_SET_PDEATHSIG
+    except (OSError, AttributeError):
+        pass
+
+
 def _free_port() -> int:
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
@@ -192,7 +202,8 @@ class Engine:
                 log.write(f"\n=== {time.ctime()} {' '.join(args)}\n".encode())
                 log.flush()
                 self.proc = subprocess.Popen(args, stdout=log, stderr=log, stdin=subprocess.DEVNULL, creationflags=flags,
-                                             cwd=str(binary.parent))
+                                             cwd=str(binary.parent),
+                                             preexec_fn=_die_with_parent if sys.platform.startswith("linux") else None)
                 deadline = time.time() + 600
                 while time.time() < deadline and self.proc.poll() is None:
                     try:
@@ -241,3 +252,17 @@ class Engine:
 
 ENGINE = Engine()
 atexit.register(ENGINE.stop)
+
+
+def _exit_on_signal(*_):
+    raise SystemExit(0)  # runs atexit, which stops the engine (closing the window sends SIGHUP; kill sends SIGTERM)
+
+
+try:
+    import signal as _signal
+    if threading.current_thread() is threading.main_thread():
+        for _sig in ("SIGTERM", "SIGHUP"):
+            if hasattr(_signal, _sig):
+                _signal.signal(getattr(_signal, _sig), _exit_on_signal)
+except (ValueError, OSError):
+    pass

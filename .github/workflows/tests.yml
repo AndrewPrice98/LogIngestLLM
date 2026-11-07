@@ -20,6 +20,6 @@ jobs:
       - name: Install test runner (the app itself is standard library only)
         run: python -m pip install pytest
       - name: Unit tests and known-answer scenarios
-        run: python -m pytest -q
+        run: python -m pytest -q -rs
       - name: Known-answer report (rules, tools, indicators, ATT&CK, false-alarm guards)
         run: python -m logagent eval

@@ -424,7 +424,7 @@ async function status() {
   try { mhost = s.llm.base_url ? new URL(s.llm.base_url).hostname : ''; } catch (e) {}
   const local = ['bundled', 'none'].includes(s.llm.provider) || ['127.0.0.1', 'localhost', '::1', '[::1]'].includes(mhost);
   $('#fEgress').textContent = s.llm.provider === 'none' ? 'off' : local ? 'on this machine' : `remote: ${mhost}`;
-  $('#fEgress').style.color = local ? 'var(--ok)' : 'var(--warn)';
+  $('#fEgress').style.color = s.llm.provider === 'none' ? 'var(--muted)' : local ? 'var(--ok)' : 'var(--warn)';
 }
 $('#fHost').textContent = location.host;
 const tick = () => { const d = new Date(); $('#fClock').textContent = utc ? d.toISOString().slice(0, 19).replace('T', ' ') + 'Z' : d.toLocaleString(); };

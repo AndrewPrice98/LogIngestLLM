@@ -18,5 +18,4 @@ dist/
 engine.log
 models/copilot-eval-partial-*.json
 docs/promo/slides/
-docs/promo/*.pdf
 evals/local/

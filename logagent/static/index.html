@@ -167,6 +167,39 @@ mark{background:var(--med);color:#111}
 .wgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;padding:16px 18px}
 .wcard{border:1px solid var(--line2);background:var(--panel);padding:14px 16px;display:flex;flex-direction:column;gap:4px}
 .wcard b{font:600 14px var(--sans)}.wcard .btn{align-self:flex-start;margin-top:auto}
+.path{font:12px var(--mono);word-break:break-all}.path b{font-weight:600;color:var(--text)}.path span{color:var(--muted)}
+.path.unusual b,.path.unusual{color:var(--high)}
+.locrow{display:flex;gap:12px;align-items:baseline;padding:2px 0}
+/* ---------- scan overview */
+.ov{border-bottom:1px solid var(--line);background:var(--panel)}
+.ovtop{display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:start;padding:16px 18px 12px}
+.verdict{font:700 11px var(--mono);letter-spacing:.1em;padding:6px 10px;border-radius:3px;white-space:nowrap;margin-top:2px}
+.v-critical{background:var(--crit);color:#fff}.v-high{background:var(--high);color:#1a0d00}.v-medium{background:var(--med);color:#1a1600}.v-ok{background:var(--ok);color:#03140a}
+.ovhead{font:600 17px/1.3 var(--sans)}
+.ovctx{color:var(--muted);font-size:11.5px;margin-top:4px;display:flex;flex-wrap:wrap;gap:2px 8px}
+.dotsep{color:var(--dim)}
+.ovact{display:flex;gap:6px;align-items:center}
+.ovact a.mini{text-decoration:none;padding:2px 8px}
+.warnb{color:var(--warn)!important;border-color:var(--warn)!important}
+.ovgrid{display:grid;grid-template-columns:280px 1fr;border-top:1px solid var(--line)}
+.ovleft{padding:12px 18px 14px;border-right:1px solid var(--line)}
+.ovright{padding:12px 18px 14px;min-width:0}
+.ovlbl{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:2px 0 6px}
+.sbar{display:grid;grid-template-columns:62px 1fr 28px;gap:8px;align-items:center;font-size:11.5px;padding:2px 0;cursor:pointer}
+.sbar:hover .sl{color:var(--text)}
+.sbar .sl{color:var(--muted)}.sbar b{text-align:right;font-variant-numeric:tabular-nums}
+.sbar .st{height:8px;background:var(--line);border-radius:2px;overflow:hidden}.sbar .sf{display:block;height:100%}
+.sf.critical{background:var(--crit)}.sf.high{background:var(--high)}.sf.medium{background:var(--med)}.sf.low{background:var(--low)}
+.ovstats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 6px;margin-top:12px;padding-top:10px;border-top:1px dashed var(--line2)}
+.ovstats div{display:flex;flex-direction:column}.ovstats b{font-size:15px;font-variant-numeric:tabular-nums}.ovstats span{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+.ovwhat{font:14px/1.5 var(--sans);margin:0 0 10px;max-width:110ch}
+.ovev,.ovsteps{margin:0 0 4px;padding-left:18px;font:13px/1.5 var(--sans)}
+.ovev li,.ovsteps li{margin:3px 0}
+.evt{font:11.5px var(--mono);color:var(--muted);margin-right:8px;white-space:nowrap}
+.ovp{font:13px/1.5 var(--sans);color:var(--muted);margin:0 0 6px}
+.ovpre{white-space:pre-wrap;font:13px/1.5 var(--sans);margin:0;max-height:260px;overflow:auto}
+.ovdet{border-top:1px solid var(--line);padding:10px 18px 12px;background:var(--bg2)}
+@media (max-width:900px){.ovgrid{grid-template-columns:1fr}.ovleft{border-right:0;border-bottom:1px solid var(--line)}.ovtop{grid-template-columns:1fr}}
 /* ---------- label queue */
 .qbar{height:4px;background:var(--line);margin-top:8px}.qbar span{display:block;height:100%;background:var(--ok)}
 .qcard{border:1px solid var(--line2);background:var(--panel)}
@@ -362,7 +395,7 @@ async function openScan(id) {
   if (s.error) return;
   fb = await api('/api/feedback/' + encodeURIComponent(id));
   if (fb.error) fb = {};
-  current = s; openKey = null; view = 'scan'; showAll = !!s.label; patF = null; expl = {}; pivots = {};
+  current = s; openKey = null; view = 'scan'; showAll = !!s.label; patF = null; expl = {}; pivots = {}; ovMore = false; ovDetails = false;
   if (pendingOpenKey) { const k = pendingOpenKey; pendingOpenKey = null; showAll = true; tab = 'findings';
     const hit = rows().find(r => r.keys.includes(k)); if (hit) { openKey = hit.keys.join(','); setTimeout(scrollOpenRow, 0); } }
   if (pendingPivot) { const i = (s.iocs || []).find(x => x.type === pendingPivot.type && x.value === pendingPivot.value);
@@ -412,41 +445,8 @@ function render() {
   const s = current, a = s.analysis || {}, st = s.stats || {}, meta = a._meta || {};
   const m = $('#main'); m.replaceChildren();
   const all = rows();
-  const cnt = l => (a.findings || []).filter(f => (f.importance || '').toLowerCase() === l).length;
-  const reviewer = meta.provider === 'none' || !meta.provider ? 'rules only' : `${meta.model || meta.provider}${meta.mode ? ' (' + meta.mode + ')' : ''}`;
 
-  m.append(el('div', {class: 'head'},
-    el('p', {class: 'headline'}, a.headline || 'Scan complete'),
-    a.summary ? el('p', {class: 'summary'}, a.summary) : null,
-    el('div', {class: 'meta'},
-      el('span', {}, 'scan ', el('b', {}, s.id)), el('span', {}, 'at ', el('b', {}, ts(s.created))),
-      el('span', {}, 'window ', el('b', {}, st.window)), el('span', {}, 'took ', el('b', {}, s.duration_s + 's')),
-      el('span', {}, 'reviewed by ', el('b', {}, reviewer)),
-      el('span', {}, 'hosts ', el('b', {}, (st.hosts || []).join(', ') || '—')),
-      s.label ? el('span', {}, 'logs ', el('b', {}, s.label)) : null,
-      el('span', {}, 'report ', el('a', {href: `/api/report?scan=${encodeURIComponent(s.id)}&format=md`}, 'markdown'), ' · ',
-        el('a', {href: `/api/report?scan=${encodeURIComponent(s.id)}&format=html`, target: '_blank', rel: 'noopener'}, 'printable / PDF')),
-      st.os ? el('span', {}, 'origin os ', el('b', {}, st.os.origin + (st.os.origin_detail ? ' / ' + st.os.origin_detail : ''))) : null)));
-  if (s.summary) {
-    const o = s.summary.origin || {};
-    m.append(el('div', {class: 'sumbox'},
-      el('div', {class: 'h'}, el('span', {}, `whole-log summary · ${s.summary.by === 'rules' ? 'rules only' : 'by ' + s.summary.by}`),
-        el('span', {title: (o.evidence || []).join('\n')}, `origin ${o.os || '?'}${o.detail ? ' / ' + o.detail : ''} (${o.confidence || '?'} confidence) · viewer ${s.summary.viewer || '?'}`)),
-      el('pre', {}, ...citeText(s.summary.text, s.summary.refs, s.id)),
-      s.summary.error ? el('div', {class: 'lbl', style: 'margin-top:6px;color:var(--warn)'}, 'model summary failed, showing rules summary: ' + s.summary.error) : null));
-  }
-  if (s.llm_error) m.append(el('div', {class: 'alert'}, '⚠ model review failed, fell back to rules: ' + s.llm_error));
-  for (const w of s.warnings || []) if (w !== '[llm] ' + s.llm_error) m.append(el('div', {class: 'alert'}, '⚠ ' + w));
-
-  const sev = st.by_severity || {}, totalSev = Object.values(sev).reduce((x, y) => x + y, 0) || 1;
-  const sevColors = {emerg: 'var(--crit)', alert: 'var(--crit)', crit: 'var(--crit)', err: 'var(--high)', warning: 'var(--med)', notice: 'var(--low)', info: 'var(--line2)', debug: 'var(--line)'};
-  m.append(el('div', {class: 'kpis'},
-    kpi(st.events, 'events'), kpi(st.clusters, 'patterns'), kpi(st.flagged, 'scored ≥ threshold'),
-    kpi(cnt('critical'), 'critical', 'crit'), kpi(cnt('high'), 'high', 'high'), kpi(cnt('medium'), 'medium', 'med'), kpi(cnt('low'), 'low', 'low'),
-    kpi((a.dismissed || []).length, 'dismissed'), kpi(Object.keys(fb).length, 'labeled')));
-  m.append(el('div', {class: 'sevbar', title: Object.entries(sev).map(([k, v]) => `${k}: ${v}`).join('  ')},
-    ...['emerg', 'alert', 'crit', 'err', 'warning', 'notice', 'info', 'debug'].filter(k => sev[k]).map(k =>
-      el('span', {style: `width:${sev[k] / totalSev * 100}%;background:${sevColors[k]}`}))));
+  renderOverview(m);
 
   const tabs = el('div', {class: 'tabs'});
   const nTech = new Set([...(s.findings || []), ...(s.others || [])].flatMap(c => c.attack || [])).size;
@@ -1017,6 +1017,17 @@ function citeText(text, refs, scanId) {  // "... [E3] ..." -> clickable referenc
   return out;
 }
 
+const UNUSUAL_TIP = 'unusual place for a program: a user-writable or temporary folder (Public, Temp, AppData, Downloads, /tmp, /dev/shm, hidden folders). Attackers drop tools here because anyone can write to them.';
+function pathEl(p, unusual) {  // folder in bold, file name dimmed; unusual folders flagged
+  const sep = p.includes('\\') ? '\\' : '/', i = p.lastIndexOf(sep);
+  return el('span', {class: 'path' + (unusual ? ' unusual' : ''), title: unusual ? UNUSUAL_TIP : p},
+    unusual ? '⚠ ' : '', el('b', {}, i >= 0 ? p.slice(0, i + 1) : ''), el('span', {}, i >= 0 ? p.slice(i + 1) : p));
+}
+function locCell(locs) {
+  if (!locs || !locs.length) return el('span', {class: 'lbl'}, 'no file path in the log');
+  return el('div', {}, ...locs.slice(0, 2).map(l => el('div', {}, pathEl(l.path, l.unusual))),
+    locs.length > 2 ? el('div', {class: 'lbl'}, `+${locs.length - 2} more (open the row)`) : null);
+}
 function toolsForKeys(keys) { return (current?.tools || []).map((t, i) => ({t, i})).filter(x => x.t.keys.some(k => keys.includes(k))); }
 
 function renderTools(m) {
@@ -1025,13 +1036,14 @@ function renderTools(m) {
   m.append(el('div', {class: 'tools'}, el('span', {class: 'lbl'},
     `${all.length} tool(s). Catalog matches are exact signatures; "model" entries were named by your model and kept only because their evidence is in the log. Click a use to open that line.`)));
   if (!all.length) { m.append(el('div', {class: 'empty'}, 'No notable tools in this scan.' + (current.stats?.tools === undefined ? '' : ' (Turn on model review to also have the model name the programs it sees.)'))); return; }
-  const t = el('table', {}, el('tr', {}, ...['risk', 'tool', 'what it is', 'uses', 'hosts', 'first', 'last', 'found by', ''].map(h => el('th', {}, h))));
+  const t = el('table', {}, el('tr', {}, ...['risk', 'tool', 'where it ran from', 'uses', 'hosts', 'first', 'last', 'found by', ''].map(h => el('th', {}, h))));
   all.forEach((x, i) => {
     const open = toolsOpen[i], sev = CAT_SEV[x.category] || (x.assessment === 'malicious' ? 'critical' : x.assessment === 'suspicious' ? 'high' : 'low');
     t.append(el('tr', {class: 'r' + (open ? ' open' : ''), on: {click: () => { toolsOpen[i] = !open; render(); }}},
       el('td', {}, el('span', {class: 'sev ' + sev, style: 'width:auto;padding:1px 6px'}, CAT_LABEL[x.category] || x.category)),
       el('td', {class: 'title'}, x.name, x.also?.length ? el('div', {class: 'lbl'}, 'also seen as: ' + x.also.join(', ')) : null, ...(x.attack || []).map(a => attackChip(a))),
-      el('td', {class: 'msg'}, x.what, x.why ? el('div', {class: 'lbl'}, (x.assessment ? x.assessment + ': ' : '') + x.why) : null),
+      el('td', {class: 'msg'}, locCell(x.locations), el('div', {class: 'lbl', style: 'margin-top:4px'}, x.what),
+        x.why ? el('div', {class: 'lbl'}, (x.assessment ? x.assessment + ': ' : '') + x.why) : null),
       el('td', {class: 'n'}, x.count), el('td', {class: 'msg'}, (x.hosts || []).join(', ')),
       el('td', {class: 'ts'}, x.first ? ts(x.first) : '—'), el('td', {class: 'ts'}, x.last ? ts(x.last) : '—'),
       el('td', {class: 'lbl', title: x.source === 'model' ? 'named by your model; kept because its evidence occurs in the log' + (x.described_by === 'model' ? '. Description written by the model: verify it.' : '') : 'built-in signature'}, x.source + (x.described_by === 'model' ? ' *' : '')),
@@ -1039,8 +1051,11 @@ function renderTools(m) {
         el('button', {class: 'mini', on: {click: e => { e.stopPropagation(); setPatF(`tool ${x.name}`, x.keys); }}}, 'patterns'))));
     if (open) t.append(el('tr', {class: 'detail'}, el('td', {colspan: 9}, el('div', {class: 'pad', style: 'border-left:2px solid var(--accent)'},
       el('div', {class: 'h'}, el('span', {}, `uses (${x.uses.length} shown of ${x.count})`)),
+      (x.locations || []).length ? el('div', {style: 'margin-bottom:12px'}, el('div', {class: 'h'}, el('span', {}, 'locations on disk')),
+        ...x.locations.map(l => el('div', {class: 'locrow'}, pathEl(l.path, l.unusual), el('span', {class: 'lbl'}, `${l.count}x`)))) : null,
       ...x.uses.map((u, j) => el('div', {class: 'use'}, el('span', {class: 'ts'}, ts(u.ts)), el('span', {class: 'lbl'}, u.host),
-        u.loc ? logBtn(current.id, `t/${i}/${j}`) : el('span', {class: 'lbl'}, 'no position'), el('code', {}, u.evidence)))))));
+        u.loc ? logBtn(current.id, `t/${i}/${j}`) : el('span', {class: 'lbl'}, 'no position'),
+        el('div', {}, u.path ? el('div', {}, pathEl(u.path)) : null, el('code', {}, u.evidence))))))));
   });
   m.append(t);
 }
@@ -1170,6 +1185,119 @@ async function renderWelcome() {
       el('button', {class: 'mini', on: {click: () => analyzePicked({type: 'files', name: x.file, ...(x.host ? {host: x.host} : {})}, 'files', [x.path], 'all', $('#useLlm').checked, true)}}, 'analyze'),
       el('span', {}, x.label, el('span', {class: 'lbl'}, '  ' + x.file))))));
 }
+// ---------- scan overview (the top of a scan): verdict, severity breakdown, structured summary
+let ovDetails = false, ovMore = false;
+const SECTION = /^\s*[*#>\s]*(WHAT|HEALTH|KEY EVENTS|TOOLS|NOISE|NEXT STEPS|NOTE)\s*\**\s*[:：]\s*\**\s*(.*)$/i;
+const BULLET = /^\s*(?:[-•*]|\d+[.)])\s+(.*)$/;
+function parseSummary(text) {
+  const out = {what: '', health: '', events: [], tools: '', noise: '', steps: [], note: '', ok: false};
+  let key = null;
+  for (const raw of String(text || '').split('\n')) {
+    const line = raw.replace(/\*\*/g, '').trimEnd();
+    if (!line.trim()) continue;
+    const m = line.match(SECTION);
+    if (m) {
+      key = m[1].toLowerCase().replace(' ', '_'); out.ok = true;
+      if (m[2].trim()) { if (key === 'key_events') out.events.push(m[2].trim()); else if (key === 'next_steps') out.steps.push(m[2].trim()); else out[key] += m[2].trim(); }
+      continue;
+    }
+    const b = line.match(BULLET);
+    if (key === 'key_events' || key === 'next_steps') {
+      const list = key === 'key_events' ? out.events : out.steps;
+      if (b) list.push(b[1].trim()); else if (list.length) list[list.length - 1] += ' ' + line.trim(); else list.push(line.trim());
+    } else if (key) out[key] += (out[key] ? ' ' : '') + line.trim();
+  }
+  return out;
+}
+function healthOf(sum, a) {
+  const h = (sum.health || '').toLowerCase();
+  const lv = h.startsWith('critical') ? 'critical' : h.includes('attention') ? 'high' : h.includes('minor') ? 'medium' : h.startsWith('healthy') ? 'ok' : null;
+  if (lv) return lv;
+  const imps = (a.findings || []).map(f => (f.importance || '').toLowerCase());
+  return imps.includes('critical') ? 'critical' : imps.includes('high') ? 'high' : imps.length ? 'medium' : 'ok';
+}
+const VERDICT = {critical: 'CRITICAL', high: 'NEEDS ATTENTION', medium: 'MINOR ISSUES', ok: 'HEALTHY'};
+function eventLine(t, refs, scanId) {
+  const m = t.match(/^((?:\d{4}-\d\d-\d\d[T ][\d:.]+Z?(?:\s*(?:\.\.|–|-|to)\s*(?:\d{4}-\d\d-\d\d[T ])?[\d:.]+Z?)?)(?:\s*UTC)?)\s*[:–-]\s*(.*)$/);
+  const when = m ? m[1].replace(/T/g, ' ') : '';
+  let body = m ? m[2] : t;
+  const sev = body.match(/^\[(critical|high|medium|low)\]\s*/i);
+  if (sev) body = body.slice(sev[0].length);
+  return el('li', {}, when ? el('span', {class: 'evt'}, when) : null,
+    sev ? el('span', {class: 'sev ' + sev[1].toLowerCase(), style: 'width:auto;padding:0 6px;margin-right:8px'}, sev[1].toLowerCase()) : null,
+    el('span', {}, ...citeText(body, refs, scanId)));
+}
+function renderOverview(m) {
+  const s = current, a = s.analysis || {}, st = s.stats || {}, meta = a._meta || {};
+  const sum = s.summary ? parseSummary(s.summary.text) : {ok: false, events: [], steps: []};
+  const refs = s.summary?.refs || {};
+  const health = healthOf(sum, a);
+  const reviewer = meta.provider === 'none' || !meta.provider ? 'rules only' : `${meta.model || meta.provider}`;
+  const cl = [...(s.findings || []), ...(s.others || [])];
+  const t0 = cl.map(c => c.first).sort()[0], t1 = cl.map(c => c.last).sort().at(-1);
+  const os = st.os ? st.os.origin + (st.os.origin_detail ? ' / ' + st.os.origin_detail : '') : '';
+  const ctx = [s.label, (st.hosts || []).slice(0, 3).join(', ') + ((st.hosts || []).length > 3 ? ` +${st.hosts.length - 3}` : ''),
+    t0 ? `${ts(t0)} → ${ts(t1).slice(ts(t0).slice(0, 10) === ts(t1).slice(0, 10) ? 11 : 0)}` : '', os, `reviewed by ${reviewer}`].filter(Boolean);
+  const notices = [...(s.llm_error ? ['model review failed, fell back to rules: ' + s.llm_error] : []),
+    ...(s.warnings || []).filter(w => w !== '[llm] ' + s.llm_error), ...(s.summary?.error ? ['model summary failed, showing rules summary: ' + s.summary.error] : [])];
+
+  const top = el('div', {class: 'ovtop'},
+    el('span', {class: 'verdict v-' + health}, VERDICT[health]),
+    el('div', {class: 'ovh'}, el('div', {class: 'ovhead'}, a.headline || 'Scan complete'),
+      el('div', {class: 'ovctx'}, ...ctx.flatMap((c, i) => i ? [el('span', {class: 'dotsep'}, '·'), c] : [c]))),
+    el('div', {class: 'ovact'},
+      notices.length ? el('button', {class: 'mini warnb', on: {click: () => { ovDetails = !ovDetails; render(); }}}, `⚠ ${notices.length}`) : null,
+      el('a', {class: 'mini', href: `/api/report?scan=${encodeURIComponent(s.id)}&format=html`, target: '_blank', rel: 'noopener'}, 'report'),
+      el('a', {class: 'mini', href: `/api/report?scan=${encodeURIComponent(s.id)}&format=md`}, '.md'),
+      el('button', {class: 'mini' + (ovDetails ? ' on' : ''), on: {click: () => { ovDetails = !ovDetails; render(); }}}, 'details')));
+
+  const lv = ['critical', 'high', 'medium', 'low'], cnt = l => (a.findings || []).filter(f => (f.importance || '').toLowerCase() === l).length;
+  const max = Math.max(1, ...lv.map(cnt));
+  const left = el('div', {class: 'ovleft'},
+    el('div', {class: 'ovlbl'}, 'findings'),
+    ...lv.map(l => el('div', {class: 'sbar', on: {click: () => { levels = new Set([l]); tab = 'findings'; render(); }}, title: `show only ${l}`},
+      el('span', {class: 'sl'}, l), el('span', {class: 'st'}, el('span', {class: 'sf ' + l, style: `width:${cnt(l) / max * 100}%`})), el('b', {}, cnt(l)))),
+    (a.dismissed || []).length ? el('div', {class: 'lbl', style: 'margin-top:6px'}, `${a.dismissed.length} dismissed as noise by the model`) : null,
+    el('div', {class: 'ovstats'},
+      ...[[st.events, 'events'], [st.clusters, 'patterns'], [(s.tools || []).filter(t => CAT_SEV[t.category]).length, 'risky tools'],
+          [(s.iocs || []).length, 'indicators'], [new Set(cl.flatMap(c => c.attack || [])).size, 'ATT&CK'], [Object.keys(fb).length, 'labeled']]
+        .map(([v, l]) => el('div', {}, el('b', {}, v ?? 0), el('span', {}, l)))));
+
+  const right = el('div', {class: 'ovright'});
+  if (sum.ok) {
+    if (sum.what) right.append(el('p', {class: 'ovwhat'}, ...citeText(sum.what, refs, s.id)));
+    const shown = ovMore ? sum.events : sum.events.slice(0, 3);
+    if (sum.events.length) right.append(el('div', {class: 'ovlbl'}, 'key events'), el('ul', {class: 'ovev'}, ...shown.map(e => eventLine(e, refs, s.id))));
+    const extra = sum.events.length - shown.length;
+    if (ovMore) {
+      if (sum.steps.length) right.append(el('div', {class: 'ovlbl'}, 'next steps'), el('ol', {class: 'ovsteps'}, ...sum.steps.map(x => el('li', {}, ...citeText(x, refs, s.id)))));
+      for (const [k, l] of [['tools', 'tools'], ['noise', 'noise'], ['note', 'note']])
+        if (sum[k]) right.append(el('div', {class: 'ovlbl'}, l), el('p', {class: 'ovp'}, ...citeText(sum[k], refs, s.id)));
+    }
+    if (extra > 0 || sum.steps.length || sum.noise || sum.note || sum.tools)
+      right.append(el('button', {class: 'mini', style: 'margin-top:8px', on: {click: () => { ovMore = !ovMore; render(); }}},
+        ovMore ? 'show less' : `show ${extra > 0 ? extra + ' more event' + (extra > 1 ? 's' : '') + ', ' : ''}next steps${sum.noise ? ', noise' : ''}`));
+    right.append(el('div', {class: 'lbl', style: 'margin-top:8px'}, `summary by ${s.summary.by === 'rules' ? 'rules (no model)' : s.summary.by}`));
+  } else if (s.summary) {
+    right.append(el('pre', {class: 'ovpre'}, ...citeText(s.summary.text, refs, s.id)));
+  } else {
+    right.append(el('p', {class: 'ovwhat'}, a.summary || ''),
+      el('div', {class: 'lbl'}, 'tick "summarize whole log" before a scan to get a written summary with citations'));
+  }
+  const box = el('div', {class: 'ov'}, top, el('div', {class: 'ovgrid'}, left, right));
+  if (ovDetails) {
+    const o = s.summary?.origin || {};
+    box.append(el('div', {class: 'ovdet'},
+      el('div', {class: 'kv'}, ...[['scan', s.id], ['created', ts(s.created)], ['window', st.window], ['took', s.duration_s + 's'],
+        ['reviewed by', reviewer + (meta.mode ? ` (${meta.mode})` : '')], ['origin os', os && `${os} (${o.confidence || '?'} confidence: ${(o.evidence || []).join('; ')})`],
+        ['viewer os', s.summary?.viewer], ['sigma rules', st.sigma ? `${st.sigma.loaded} loaded, ${st.sigma.skipped} skipped` : ''],
+        ['sources', (s.sources || []).map(x => x.path || x.name || x.type).join('; ')]]
+        .filter(([, v]) => v).flatMap(([k, v]) => [el('span', {}, k), el('span', {}, String(v))])),
+      ...notices.map(n => el('div', {class: 'alert', style: 'margin-top:6px'}, '⚠ ' + n))));
+  }
+  m.append(box);
+}
+
 // ---------- log locations: configure, discover, browse, pick files to analyze
 const TYPE_INFO = {files: 'folder, glob or file; format detected per file', journald: 'systemd journal on this machine',
   syslog: 'syslog-format text files', app: 'your application logs (text or JSON lines)', windows: 'live Windows Event Log channels',

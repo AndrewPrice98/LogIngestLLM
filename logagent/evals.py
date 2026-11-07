@@ -165,7 +165,7 @@ def model_checks(sc: dict, scan: dict, cfg: dict, forbidden: list[str]) -> list[
 def run(cfg: dict, with_model: bool = False, only: list[str] | None = None, progress=print) -> dict:
     spec = load_scenarios()
     report = {"created": datetime.now().isoformat(timespec="seconds"), "model": cfg["llm"].get("model") if with_model else None,
-              "adapter": active_adapter() if with_model else None,
+              "adapter": active_adapter() if with_model else None, "partial": bool(only),
               "summary_model": cfg["llm"].get("summary_model") if with_model else None, "scenarios": []}
     for sc in spec["scenarios"]:
         if only and sc["name"] not in only:
@@ -194,7 +194,7 @@ def save(report: dict) -> tuple[Path, dict | None]:
     """Write the report next to the models and return the previous comparable one (same mode)."""
     d = ROOT / "models"
     d.mkdir(exist_ok=True)
-    mode = "model" if report["model"] else "static"
+    mode = ("model" if report["model"] else "static") if not report.get("partial") else "partial"
     prev = None
     for p in sorted(d.glob(f"copilot-eval-{mode}-*.json"), reverse=True):
         try:

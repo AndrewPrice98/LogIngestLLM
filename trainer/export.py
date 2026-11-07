@@ -31,8 +31,16 @@ def run(cmd: list) -> None:
 
 
 def base_dir() -> Path:
-    from huggingface_hub import snapshot_download
-    return Path(snapshot_download(BASE_MODEL, local_files_only=True))  # cached by training/serving; no download
+    """The base model's local cache folder (filled by training/serving; nothing is downloaded)."""
+    try:
+        from huggingface_hub import snapshot_download
+        return Path(snapshot_download(BASE_MODEL, local_files_only=True))
+    except Exception:  # e.g. "incomplete" only because README/LICENSE weren't cached: the weights are what matter
+        from huggingface_hub.constants import HF_HUB_CACHE
+        snaps = sorted((Path(HF_HUB_CACHE) / f"models--{BASE_MODEL.replace('/', '--')}" / "snapshots").glob("*/config.json"))
+        if not snaps:
+            raise SystemExit(f"{BASE_MODEL} is not in the local cache; run trainer/serve.py once to fetch it")
+        return snaps[-1].parent
 
 
 def quantizer(llama: Path) -> Path:

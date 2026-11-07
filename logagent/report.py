@@ -118,9 +118,12 @@ def markdown(scan: dict) -> str:
         L += [f"**Evidence** ({where((r['c'].get('sample_locs') or [None])[0])}):", "", "```", r["c"]["samples"][0][:1500], "```", ""]
     tools = [t for t in scan.get("tools", []) if t["category"] not in ("system", "developer")]
     if tools:
-        L += ["## Tools seen", "", "| Tool | Category | Uses | First (UTC) | What it is | First use |", "|---|---|---|---|---|---|"]
-        L += [f"| {t['name']} | {t['category']} | {t['count']} | {_utc(t.get('first'))} | {t.get('what', '')} | "
-              f"{where((t.get('uses') or [{}])[0].get('loc'))} |" for t in tools]
+        L += ["## Tools seen", "", "| Tool | Category | Uses | First (UTC) | Location on disk | First use |", "|---|---|---|---|---|---|"]
+        L += [f"| {t['name']} | {t['category']} | {t['count']} | {_utc(t.get('first'))} | "
+              + ("; ".join(("⚠ " if l["unusual"] else "") + f"`{l['path']}`" for l in (t.get("locations") or [])[:3]) or "—")
+              + f" | {where((t.get('uses') or [{}])[0].get('loc'))} |" for t in tools]
+        L += ["", "⚠ = user-writable or temporary folder (Public, Temp, AppData, /tmp, /dev/shm, hidden folders): "
+                  "a common place for attackers to drop tools.", ""]
         L.append("")
     techs = {}
     for c in scan.get("findings", []) + scan.get("others", []):

@@ -94,7 +94,8 @@ def _extract_json(text: str) -> dict:
 
 
 def chat(system: str, user: str, cfg: dict, json_mode: bool = False) -> tuple[str, dict]:
-    """One-shot completion against the configured provider. Returns (text, usage)."""
+    """One-shot completion against the configured provider. Returns (text, usage).
+    Temperature defaults to 0: the same logs give the same answer (set llm.temperature to change it)."""
     provider = (cfg.get("provider") or "none").lower()
     timeout = int(cfg.get("timeout", 180))
     max_tokens = int(cfg.get("max_tokens", 4000))
@@ -113,7 +114,7 @@ def chat(system: str, user: str, cfg: dict, json_mode: bool = False) -> tuple[st
         base = (cfg.get("base_url") or "http://localhost:11434").rstrip("/")
         payload = {
             "model": cfg.get("model") or "qwen3:8b", "stream": False,
-            "options": {"num_ctx": int(cfg.get("num_ctx", 16384)), "temperature": 0.2},
+            "options": {"num_ctx": int(cfg.get("num_ctx", 16384)), "temperature": float(cfg.get("temperature", 0.0))},
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
         }
         if json_mode:
@@ -125,7 +126,7 @@ def chat(system: str, user: str, cfg: dict, json_mode: bool = False) -> tuple[st
         base = (cfg.get("base_url") or "https://api.openai.com/v1").rstrip("/")
         key = cfg.get("api_key") or os.environ.get("OPENAI_API_KEY", "")
         payload = {
-            "model": cfg.get("model"), "temperature": 0.2, "max_tokens": max_tokens,
+            "model": cfg.get("model"), "temperature": float(cfg.get("temperature", 0.0)), "max_tokens": max_tokens,
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
         }
         if json_mode:
@@ -136,7 +137,8 @@ def chat(system: str, user: str, cfg: dict, json_mode: bool = False) -> tuple[st
         from . import bundled
         try:
             text = bundled.ENGINE.chat(system, user, adapter=cfg.get("model") != cfg.get("summary_model", "logagent-base"),
-                                       max_tokens=max_tokens, temperature=0.2, json_mode=json_mode, timeout=timeout)
+                                       max_tokens=max_tokens, temperature=float(cfg.get("temperature", 0.0)),
+                                       json_mode=json_mode, timeout=timeout)
         except (RuntimeError, urllib.error.URLError, OSError, KeyError, ValueError) as exc:
             raise LLMError(f"bundled model: {exc}") from exc
         return re.sub(r"<think>.*?</think>", "", text, flags=re.S), {}
@@ -163,6 +165,15 @@ inside it."""
 def cited_ids(text: str) -> list[str]:
     """[E3], [E3, E4] and [E3][E4] all cite."""
     return [x for grp in re.findall(r"\[(E\d+(?:\s*[,;]\s*E\d+)*)\]", text) for x in re.split(r"\s*[,;]\s*", grp)]
+
+
+def drop_unresolved(text: str, refs: dict) -> str:
+    """Remove citations that don't point at a real event ([E9] when there is no E9): a citation must never be made up."""
+    def fix(m):
+        ids = [x for x in re.split(r"\s*[,;]\s*", m.group(1)) if x in refs]
+        return "[" + ", ".join(ids) + "]" if ids else ""
+    return re.sub(r"\s?\[(E\d+(?:\s*[,;]\s*E\d+)*)\]", lambda m: (" " if m.group(0).startswith(" ") else "") + fix(m)
+                  if fix(m) else "", text)
 
 
 def cite_catalog(scan: dict, limit: int = 40) -> tuple[list[dict], dict]:
@@ -204,15 +215,20 @@ def ask(scan: dict, question: str, cfg: dict) -> tuple[str, dict]:
     c = {**cfg, "max_tokens": 1200}
     if cfg.get("summary_model"):
         c["model"] = cfg["summary_model"]
-    # ~24k characters (~7k tokens) keeps a 4B model on an 8 GB GPU; the citable events go first so they survive
+    # must fit the model's context window with room for the answer (prompt_chars; ~3 characters per token).
+    # Trim the bulky parts first rather than cutting the JSON blindly.
+    budget = int(cfg.get("prompt_chars", 24000))
     body = json.dumps(context, separators=(",", ":"), default=str)
-    if len(body) > 24000:
-        context["indicators"] = context["indicators"][:15]
-        context["findings"] = context["findings"][:12]
-        body = json.dumps(context, separators=(",", ":"), default=str)[:24000]
+    for trim in (("indicators", 15), ("findings", 15), ("tools", 8), ("indicators", 5), ("findings", 8), ("citable_events", 25)):
+        if len(body) <= budget:
+            break
+        context[trim[0]] = context[trim[0]][:trim[1]]
+        body = json.dumps(context, separators=(",", ":"), default=str)
+    body = body[:budget]
     prompt = "Scan data:\n" + body + "\n\nQuestion: " + question
     text, _ = chat(ASK_PROMPT, prompt, c)
     text = re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
+    text = drop_unresolved(text, refs)
     used = {m for m in cited_ids(text) if m in refs}
     return text, {k: v for k, v in refs.items() if k in used}
 
@@ -275,7 +291,8 @@ Write plain text in exactly this shape, no markdown headings:
 WHAT: one or two sentences: what produced this log and the period it covers (exact UTC times).
 HEALTH: one of healthy | minor issues | needs attention | critical, then a dash and the reason.
 KEY EVENTS:
-- <UTC time or range>: <what happened, with the specific value: unit, IP, error code, path> (<count>x)
+- <UTC time or range>: <what happened, naming the specific account, service, file/path, IP or error code from \
+that item's sample> (<count>x)
 (up to 6 lines, most important first; skip routine events)
 NOISE: one sentence on what makes up most of the volume and whether it's harmless.
 NEXT STEPS:

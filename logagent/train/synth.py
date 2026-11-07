@@ -163,6 +163,10 @@ WIN_INTERESTING = [  # (provider, event id, level, data, repeat range)
     ("Microsoft-Windows-Eventlog", "1102", 4, lambda r, c: {"SubjectUserName": c["user"]}, (1, 1)),
     ("Microsoft-Windows-Security-Auditing", "4720", 0, lambda r, c: {"TargetUserName": r.choice(["support2", "svc_backup", "admin1"]),
      "SubjectUserName": c["user"]}, (1, 1)),
+    ("Microsoft-Windows-Security-Auditing", "4732", 0, lambda r, c: {"MemberName": "-", "MemberSid": "S-1-5-21-1004",
+     "TargetUserName": r.choice(["Administrators", "Remote Desktop Users", "Backup Operators"]), "SubjectUserName": c["user"]}, (1, 1)),
+    ("Microsoft-Windows-Security-Auditing", "4728", 0, lambda r, c: {"MemberName": "CN=svc_backup,CN=Users,DC=corp,DC=local",
+     "TargetUserName": r.choice(["Domain Admins", "Enterprise Admins", "Schema Admins"]), "SubjectUserName": c["user"]}, (1, 1)),
 ]
 WIN_ROUTINE = [
     ("Microsoft-Windows-Security-Auditing", "4624", 0, lambda r, c: {"TargetUserName": "SYSTEM", "LogonType": "5",

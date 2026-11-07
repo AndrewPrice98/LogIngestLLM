@@ -1,0 +1,34 @@
+{
+ "adapter": "models/logagent-20261106-1615/adapter",
+ "data": "train_data/eval.jsonl",
+ "n": 150,
+ "report": {
+  "all": {
+   "n": 119,
+   "valid_json": 1.0,
+   "exact": 0.916,
+   "within_one_level": 0.983,
+   "flag_precision": 1.0,
+   "flag_recall": 1.0
+  },
+  "synthetic": {
+   "n": 119,
+   "valid_json": 1.0,
+   "exact": 0.916,
+   "within_one_level": 0.983,
+   "flag_precision": 1.0,
+   "flag_recall": 1.0
+  },
+  "confusion(gold->pred)": {
+   "critical->critical": 11,
+   "critical->high": 4,
+   "high->critical": 1,
+   "high->high": 27,
+   "high->low": 2,
+   "low->low": 11,
+   "low->medium": 3,
+   "medium->medium": 30,
+   "noise->noise": 30
+  }
+ }
+}

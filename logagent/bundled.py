@@ -17,6 +17,7 @@ import atexit
 import hashlib
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -30,7 +31,9 @@ from .paths import app_dir, user_dir
 
 DEFAULT_LLM = {"provider": "bundled", "model": "logagent", "summary_model": "logagent-base", "mode": "triage",
                "timeout": 900, "triage_limit": 20}
-CTX = int(os.environ.get("LOGINGESTLLM_CTX", "8192"))  # 8k tokens keeps the KV cache ~1.2 GB on small machines
+CTX = int(os.environ.get("LOGINGESTLLM_CTX", "12288"))  # 12k tokens: KV cache ~1.7 GB next to the 2.5 GB model
+# prompts must leave room for the answer inside the context window (JSON scan data is ~3 characters per token)
+DEFAULT_LLM["prompt_chars"] = max(8000, min(24000, (CTX - 1200 - 800) * 3))
 EXE = ".exe" if sys.platform == "win32" else ""
 
 
@@ -45,10 +48,11 @@ def _model_dir() -> Path:
 def binaries() -> list[Path]:
     d = _engine_dir()
     order = [d / "gpu", d, d / "cpu"]
-    out = []
+    out: list[Path] = []
     for base in order:
         if base.is_dir():
-            out += sorted(base.rglob(f"llama-server{EXE}"), key=lambda p: len(p.parts))[:1]
+            hit = sorted(base.rglob(f"llama-server{EXE}"), key=lambda p: len(p.parts))[:1]
+            out += [h for h in hit if h not in out]
     return out
 
 
@@ -99,6 +103,26 @@ def _join_parts(progress=print) -> None:
         tmp.replace(target)
         for p in parts:
             p.unlink()
+
+
+def pick_device(listing: str) -> str | None:
+    """From `llama-server --list-devices`: prefer a discrete GPU over integrated graphics (which is often listed
+    first and much slower). None = let llama.cpp decide."""
+    devs = []
+    for line in listing.splitlines():
+        m = re.match(r"\s*(\w+\d+):\s*(.+?)\s*\((\d+) MiB,\s*(\d+) MiB free\)", line)
+        if m:
+            devs.append((m.group(1), m.group(2), int(m.group(3))))
+    if len(devs) < 2:
+        return None
+
+    def rank(d):
+        name = d[1].lower()
+        discrete = ("nvidia" in name or " rx " in f" {name} " or "radeon pro" in name or "arc" in name.split()
+                    or "geforce" in name or "quadro" in name)
+        integrated = "graphics" in name or "uhd" in name or "iris" in name
+        return (discrete, not integrated, d[2])
+    return max(devs, key=rank)[0]
 
 
 def _free_port() -> int:
@@ -154,6 +178,14 @@ class Engine:
                 self.port = _free_port()
                 args = [str(binary), "-m", str(base[0]), "--host", "127.0.0.1", "--port", str(self.port), "-c", str(CTX),
                         "-np", "1", "-ngl", "999", "--jinja"]
+                try:
+                    lst = subprocess.run([str(binary), "--list-devices"], capture_output=True, timeout=60,
+                                         creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
+                    dev = pick_device(lst.stdout.decode(errors="replace") + lst.stderr.decode(errors="replace"))
+                    if dev:
+                        args += ["--device", dev]
+                except (OSError, subprocess.TimeoutExpired):
+                    pass
                 if lora:
                     args += ["--lora", str(lora[0]), "--lora-init-without-apply"]
                 flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0

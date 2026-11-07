@@ -66,6 +66,17 @@ def guess_origin(sources: list[dict], events: list[Event]) -> dict:
             "evidence": evidence[:6]}
 
 
+# fields worth naming in a summary line (Windows event data); given to the model separately so they stand out
+KEY_FIELDS = ("ServiceName", "TargetUserName", "SubjectUserName", "IpAddress", "WorkstationName", "CommandLine",
+              "NewProcessName", "ImagePath", "TaskName", "ShareName", "MemberName", "TicketEncryptionType", "LogonType",
+              "Status", "SubStatus", "TargetImage", "TargetObject", "DestinationIp")
+
+
+def _details(c: dict) -> dict:
+    f = c.get("fields") or {}
+    return {k: str(f[k])[:160] for k in KEY_FIELDS if f.get(k) not in (None, "", "-")}
+
+
 def _utc(iso: str) -> str:
     try:
         return datetime.fromisoformat(iso).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
@@ -113,6 +124,7 @@ def build_digest(sources: list[dict], events: list[Event], clusters: list[dict],
             refs[cite] = f"c/{c['key']}/0"
         ranked.append({"cite": cite, "importance": f.get("importance"), "title": f.get("title"), "why": (f.get("why") or "")[:300],
                        **({"count": c["count"], "first": _utc(c["first"]), "last": _utc(c["last"]), "program": c["program"],
+                           "details": _details(c),
                            "sample": c["samples"][0][:300]} if c else {})})
     errors = [c for c in by_count if c["severity"] in SEV_BAD][:8]
     utc_s = lambda t: t.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
@@ -142,7 +154,8 @@ def heuristic_summary(d: dict) -> str:
     """Readable summary from the digest alone, for rules-only mode or when the model is down."""
     if not d["events"]:
         return "WHAT: no events in the selected window.\nHEALTH: unknown - nothing to read."
-    where = ", ".join(f["file"] for f in d["files"][:3]) or ", ".join(s["name"] for s in d["sources"][:3])
+    where = ", ".join(f["file"].replace("\\", "/").rsplit("/", 1)[-1] for f in d["files"][:3]) or \
+        ", ".join(s["name"] for s in d["sources"][:3])
     origin = d["origin_os"] if d["origin_os"] != "unknown" else "unknown OS"
     if d.get("origin_detail"):
         origin += f" ({d['origin_detail']})"

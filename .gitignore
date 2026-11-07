@@ -15,3 +15,7 @@ models/copilot-eval-static-*.json
 engine/
 model/
 dist/
+engine.log
+models/copilot-eval-partial-*.json
+docs/promo/slides/
+docs/promo/*.pdf

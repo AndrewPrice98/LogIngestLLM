@@ -60,7 +60,7 @@ fallible. LogIngestLLM is built around that:
 | **Triage** | Clusters thousands of lines into patterns, scores them (~65 built-in rules, your Sigma rules, severity, bursts, "first time on this host", tool signatures) and has the model review the top ones: importance, why it matters, what to do. |
 | **Whole-log summary** | What produced the log, health, key events with UTC times, what the noise is, next steps with commands for the OS that wrote the log (it tells a Windows log read on Linux apart from a local one). |
 | **Explain this event** | The line with its parts annotated (public vs private IPs, users, ports, NTSTATUS codes, logon types, Kerberos encryption), what normal looks like, when to worry, and **check it yourself**: the native `journalctl` / `grep` / `Get-WinEvent` command. |
-| **Tools** | Attacker tools (Mimikatz, LinPEAS, reverse shells, C2), abused built-ins (certutil downloads, encoded PowerShell, LSASS dumps via comsvcs.dll, `curl \| sh`, shadow-copy deletion), scanners (Nmap, sqlmap, Nikto, gobuster), remote-access tools, tunnels and miners. Each use links to its line. |
+| **Tools** | Attacker tools (Mimikatz, LinPEAS, reverse shells, C2), abused built-ins (certutil downloads, encoded PowerShell, LSASS dumps via comsvcs.dll, `curl \| sh`, shadow-copy deletion), scanners (Nmap, sqlmap, Nikto, gobuster), remote-access tools, tunnels and miners. Shows **where each one ran from** on disk and flags user-writable or temp folders (`C:\Users\Public`, `AppData\Local\Temp`, `/tmp`, `/dev/shm`); each use links to its line. |
 | **Jump to the event** | Every event remembers its position (file + line, journal cursor, Windows record ID). Open it in the original log with the surrounding lines, page through, search. |
 | **ATT&CK & indicators** | Techniques laid out by tactic (evidence only; a routine logon is not "T1078"), indicators with exact counts, pivot across all past scans, CSV export. |
 | **Timeline & report** | One timeline across every log in a scan; a Markdown or printable (PDF) report with citations resolved to `file:line`. |
@@ -153,6 +153,20 @@ summary_model = "logagent-base"     # same weights, adapter off: summaries, expl
 mode = "triage"
 ```
 
+
+### Results
+
+Triage on the same 119 held-out log patterns (exact importance level; flags = worth knowing vs noise):
+
+| model | exact level | within one level | flag precision | flag recall |
+|---|---|---|---|---|
+| Qwen3-4B base, no fine-tune | 34.5% | 72.3% | 74.8% | 100% |
+| v1: rule labels + Pi/Linux synthetic data | 67.2% | 85.7% | 98.7% | 85.4% |
+| **v2: rebalanced Linux/Windows/web data, tool-aware labels** | **91.6%** | **98.3%** | **100%** | **100%** |
+
+End to end through the built-in engine (Q4_K_M + LoRA in llama.cpp, deterministic), the known-answer evaluation passes
+109 of 110 checks across six investigations; the miss is a training-data gap (privileged-group changes) already added
+for the next retrain. Run it yourself with `python -m logagent eval --model`.
 
 ## How it works
 

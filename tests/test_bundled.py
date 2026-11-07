@@ -110,3 +110,14 @@ def test_no_engine_means_rules_only(app):
     assert not bundled.available()
     with pytest.raises(llm.LLMError):
         llm.chat("s", "u", dict(bundled.DEFAULT_LLM))
+
+
+@pytest.mark.parametrize("listing, want", [
+    ("  Vulkan0: AMD Radeon 780M Graphics (RADV PHOENIX) (8142 MiB, 6646 MiB free)\n"
+     "  Vulkan1: NVIDIA GeForce RTX 4060 Laptop GPU (8188 MiB, 4799 MiB free)", "Vulkan1"),
+    ("  Vulkan0: Intel(R) Iris(R) Xe Graphics (4000 MiB, 3000 MiB free)\n  Vulkan1: AMD Radeon RX 7600 (8192 MiB, 8000 MiB free)", "Vulkan1"),
+    ("  Metal: Apple M2 (16000 MiB, 12000 MiB free)", None),
+    ("", None),
+])
+def test_prefers_discrete_gpu(listing, want):
+    assert bundled.pick_device(listing) == want

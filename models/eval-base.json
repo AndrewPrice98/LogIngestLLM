@@ -1,36 +1,39 @@
 {
- "adapter": "None",
+ "adapter": null,
+ "data": "train_data/eval.jsonl",
+ "n": 150,
  "report": {
   "all": {
-   "n": 100,
+   "n": 119,
    "valid_json": 1.0,
-   "exact": 0.33,
-   "within_one_level": 0.73,
-   "flag_precision": 0.76,
+   "exact": 0.345,
+   "within_one_level": 0.723,
+   "flag_precision": 0.748,
    "flag_recall": 1.0
   },
   "synthetic": {
-   "n": 100,
+   "n": 119,
    "valid_json": 1.0,
-   "exact": 0.33,
-   "within_one_level": 0.73,
-   "flag_precision": 0.76,
+   "exact": 0.345,
+   "within_one_level": 0.723,
+   "flag_precision": 0.748,
    "flag_recall": 1.0
   },
   "confusion(gold->pred)": {
-   "critical->critical": 8,
+   "critical->critical": 9,
    "critical->high": 4,
    "critical->medium": 2,
-   "high->critical": 2,
-   "high->high": 11,
-   "high->medium": 11,
+   "high->critical": 1,
+   "high->high": 10,
+   "high->medium": 19,
+   "low->high": 1,
    "low->low": 3,
-   "low->medium": 11,
-   "medium->critical": 1,
-   "medium->high": 12,
-   "medium->medium": 11,
-   "noise->low": 23,
-   "noise->medium": 1
+   "low->medium": 10,
+   "medium->high": 8,
+   "medium->low": 3,
+   "medium->medium": 19,
+   "noise->low": 24,
+   "noise->medium": 6
   }
  }
 }

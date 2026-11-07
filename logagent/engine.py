@@ -199,6 +199,7 @@ def run_scan(cfg: dict, sources: list[dict] | None = None, window: str | None = 
                 warn(f"[summary] {exc}")
         if not file_summary.get("text"):
             file_summary["text"] = summ.heuristic_summary(digest)
+        file_summary["text"] = llm.drop_unresolved(file_summary["text"], refs)
         used = set(llm.cited_ids(file_summary["text"]))
         file_summary["refs"] = {k: v for k, v in refs.items() if k in used}
 

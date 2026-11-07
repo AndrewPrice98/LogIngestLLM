@@ -18,7 +18,7 @@ from datetime import datetime
 import torch
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 
-from common import BASE_MODEL, MODELS, ROOT, load, read_jsonl
+from common import BASE_MODEL, MODELS, ROOT, latest_adapter, load, read_jsonl
 
 
 def tokenize(tok, ex: dict, max_len: int):
@@ -128,6 +128,9 @@ def main():
                       f"mem {torch.cuda.max_memory_allocated() / 2**30:.1f}GB", flush=True)
                 run_loss, since = 0.0, 0
 
+    active = MODELS / "ACTIVE"
+    if not active.exists() and latest_adapter():  # a new adapter goes live only via trainer/promote.py
+        active.write_text(str(latest_adapter().relative_to(ROOT)).replace("\\", "/") + "\n")
     model.save_pretrained(out_dir / "adapter")
     tok.save_pretrained(out_dir / "adapter")
     (out_dir / "train_info.json").write_text(json.dumps({

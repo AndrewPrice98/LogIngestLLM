@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LogIngestLLM carousel</title>
+<style>
+@page { size: 1080px 1350px; margin: 0; }
+:root{
+  --bg:#0a0d11; --bg2:#0e1217; --panel:#11161c; --panel2:#161c24; --line:#1f2731; --line2:#2a3542;
+  --text:#e6edf3; --muted:#9aa7b6; --dim:#6b7887; --accent:#36c2dc; --accent2:#1e6f80;
+  --crit:#ff4d5e; --high:#ff9f43; --med:#e9cc3f; --low:#6ea8fe; --ok:#3ddc84;
+  --sans:"Noto Sans","Cantarell",system-ui,sans-serif; --mono:"Hack","DejaVu Sans Mono",monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#000}
+.s{width:1080px;height:1350px;background:var(--bg);color:var(--text);font-family:var(--sans);position:relative;overflow:hidden;
+   page-break-after:always;padding:84px 80px 0;display:flex;flex-direction:column}
+.s::before{content:"";position:absolute;inset:0;background:
+   radial-gradient(900px 500px at 85% -10%,rgba(54,194,220,.13),transparent 60%),
+   radial-gradient(700px 500px at -10% 110%,rgba(54,194,220,.07),transparent 60%);pointer-events:none}
+.kick{font:600 22px/1 var(--mono);letter-spacing:.14em;color:var(--accent);text-transform:uppercase;margin-bottom:28px}
+h1{font:800 68px/1.08 var(--sans);letter-spacing:-.02em}
+h2{font:800 58px/1.1 var(--sans);letter-spacing:-.015em}
+.sub{font:400 30px/1.4 var(--sans);color:var(--muted);margin-top:26px}
+.acc{color:var(--accent)}
+.foot{position:absolute;left:80px;right:80px;bottom:54px;display:flex;justify-content:space-between;align-items:center;
+      font:500 22px var(--mono);color:var(--dim)}
+.foot b{color:var(--text);font-weight:600}
+.n{font:700 22px var(--mono);color:var(--accent)}
+.shot{margin-top:44px;border:1px solid var(--line2);border-radius:14px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+.shot img{display:block;width:100%}
+.rows{margin-top:52px;display:flex;flex-direction:column;gap:26px}
+.row{display:grid;grid-template-columns:72px 1fr;gap:26px;align-items:start;background:var(--panel);border:1px solid var(--line);
+     border-radius:16px;padding:28px 30px}
+.row .i{width:72px;height:72px;border-radius:14px;background:var(--panel2);border:1px solid var(--line2);display:flex;
+        align-items:center;justify-content:center;font:700 30px var(--mono);color:var(--accent)}
+.row b{display:block;font:700 32px/1.25 var(--sans);margin-bottom:6px}
+.row span{font:400 25px/1.4 var(--sans);color:var(--muted)}
+.pipe{margin-top:46px;display:flex;flex-direction:column;gap:0}
+.step{display:grid;grid-template-columns:64px 1fr;gap:26px;padding:22px 0;position:relative}
+.step:not(:last-child)::after{content:"";position:absolute;left:31px;top:86px;bottom:-4px;width:2px;background:var(--line2)}
+.dot{width:64px;height:64px;border-radius:50%;border:2px solid var(--accent);display:flex;align-items:center;justify-content:center;
+     font:700 26px var(--mono);color:var(--accent);background:var(--bg)}
+.step b{display:block;font:700 34px/1.2 var(--sans)}
+.step span{display:block;font:400 25px/1.4 var(--sans);color:var(--muted);margin-top:6px}
+.case{margin-top:40px;background:var(--panel);border:1px solid var(--line2);border-radius:18px;padding:34px 36px;font-family:var(--mono)}
+.case .lbl{font:600 18px var(--mono);letter-spacing:.12em;color:var(--dim);text-transform:uppercase;margin-bottom:10px}
+.case .big{font:700 40px/1.2 var(--sans);color:var(--text)}
+.sev{display:inline-block;background:var(--crit);color:#fff;font:700 18px var(--mono);letter-spacing:.08em;padding:5px 12px;border-radius:6px;
+     vertical-align:middle;margin-right:14px}
+.chip{display:inline-block;border:1.5px solid var(--accent2);color:var(--accent);font:700 20px var(--mono);padding:3px 10px;border-radius:6px;margin-left:10px}
+.kv{display:grid;grid-template-columns:200px 1fr;gap:16px 20px;margin-top:26px;font:500 24px/1.35 var(--mono)}
+.kv .k{color:var(--dim)} .kv .v{color:var(--text)} .kv .v em{font-style:normal;color:var(--high)}
+.cite{display:inline-block;background:var(--accent2);color:var(--text);font:700 18px var(--mono);border-radius:5px;padding:2px 7px;margin-left:8px}
+.bars{margin-top:40px;display:flex;flex-direction:column;gap:24px}
+.bar .t{display:flex;justify-content:space-between;font:600 25px var(--sans);margin-bottom:10px}
+.bar .t span{font-family:var(--mono);color:var(--muted)}
+.track{height:34px;background:var(--panel2);border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+.fill{height:100%;border-radius:8px}
+.facts{margin-top:40px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.fact{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 22px}
+.fact b{display:block;font:800 40px/1.1 var(--sans);color:var(--accent)}
+.fact span{display:block;font:400 21px/1.35 var(--sans);color:var(--muted);margin-top:8px}
+.grid{margin-top:46px;display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:28px 28px 30px}
+.tile .tag{font:700 18px var(--mono);letter-spacing:.1em;color:var(--accent);text-transform:uppercase}
+.tile b{display:block;font:700 31px/1.2 var(--sans);margin:12px 0 8px}
+.tile span{font:400 23px/1.4 var(--sans);color:var(--muted)}
+.dl{margin-top:46px;display:flex;flex-direction:column;gap:18px}
+.dl div{display:flex;justify-content:space-between;align-items:center;background:var(--panel);border:1px solid var(--line2);border-radius:14px;
+        padding:24px 30px;font:600 30px var(--sans)}
+.dl div span{font:500 22px var(--mono);color:var(--muted)}
+.cta{margin-top:44px;font:700 36px/1.3 var(--sans)}
+.url{margin-top:16px;font:700 30px var(--mono);color:var(--accent)}
+.caught{margin-top:26px;font:400 22px/1.45 var(--sans);color:var(--muted);border-left:3px solid var(--accent2);padding-left:18px}
+</style>
+</head>
+<body>
+
+<!-- 1 hook -->
+<section class="s">
+  <div class="kick">Local-only · open source · my own model</div>
+  <h1>I built a SOC co-pilot that runs <span class="acc">entirely on my laptop.</span></h1>
+  <p class="sub">It reads Windows, Linux and web logs, finds the few events that matter, and cites the exact log line behind every claim.</p>
+  <div class="shot"><img src="{{SHOT_OVERVIEW}}" alt=""></div>
+  <div class="foot"><b>LogIngestLLM</b><span>swipe →</span></div>
+</section>
+
+<!-- 2 problem -->
+<section class="s">
+  <div class="kick">The problem</div>
+  <h2>The logs you most need help with are the ones you can't paste into a chatbot.</h2>
+  <div class="rows">
+    <div class="row"><div class="i">10k</div><div><b>Thousands of lines, a handful that matter</b><span>Cron chatter and service restarts bury the one 4769 that says someone is roasting your service accounts.</span></div></div>
+    <div class="row"><div class="i">!</div><div><b>Logs are sensitive</b><span>Usernames, hosts, internal IPs, command lines. They shouldn't leave the network, let alone go to a cloud LLM.</span></div></div>
+    <div class="row"><div class="i">?</div><div><b>AI sounds sure even when it's wrong</b><span>A confident summary is worthless to an analyst unless every claim can be checked against the evidence.</span></div></div>
+  </div>
+  <p class="sub" style="margin-top:44px">So: keep everything local, and make the AI <span class="acc">show its evidence.</span></p>
+  <div class="foot"><b>LogIngestLLM</b><span class="n">2/8</span></div>
+</section>
+
+<!-- 3 how it works -->
+<section class="s">
+  <div class="kick">How it works</div>
+  <h2>From raw logs to a cited answer, all on one machine</h2>
+  <div class="pipe">
+    <div class="step"><div class="dot">1</div><div><b>Collect</b><span>Windows Event Log and exported .evtx (read natively on Linux and macOS), journald / syslog, web and app logs.</span></div></div>
+    <div class="step"><div class="dot">2</div><div><b>Group</b><span>Thousands of lines become a few hundred patterns. Every event keeps its exact position in the original file.</span></div></div>
+    <div class="step"><div class="dot">3</div><div><b>Score</b><span>~65 detection rules, your Sigma rules, attacker-tool signatures, bursts, and "first time on this host".</span></div></div>
+    <div class="step"><div class="dot">4</div><div><b>AI triage</b><span>My fine-tuned model reviews each pattern: how much it matters, why, and what to do.</span></div></div>
+    <div class="step"><div class="dot">5</div><div><b>Evidence</b><span>Summary, timeline, ATT&amp;CK, indicators and a report, every claim linked to the line it came from.</span></div></div>
+  </div>
+  <div class="foot"><b>LogIngestLLM</b><span class="n">3/8</span></div>
+</section>
+
+<!-- 4 case -->
+<section class="s">
+  <div class="kick">Real case · HTB Sherlock Campfire-1</div>
+  <h2>Two exported .evtx files, opened on Linux. One answer.</h2>
+  <div class="case">
+    <div class="lbl">Top finding</div>
+    <div class="big"><span class="sev">HIGH</span>Kerberoasting<span class="chip">T1558.003</span></div>
+    <div class="kv">
+      <span class="k">when</span><span class="v">2024-05-21 03:18:09 UTC<span class="cite">E1</span></span>
+      <span class="k">who</span><span class="v">alonzo.spire</span>
+      <span class="k">target</span><span class="v">MSSQLService, <em>RC4 (0x17)</em></span>
+      <span class="k">from</span><span class="v">172.17.79.129 · 183 events</span>
+      <span class="k">tool</span><span class="v">PowerView in PowerShell script blocks</span>
+    </div>
+  </div>
+  <div class="shot" style="margin-top:34px"><img src="{{SHOT_LOG}}" alt=""></div>
+  <div class="foot"><b>LogIngestLLM</b><span class="n">4/8</span></div>
+</section>
+
+<!-- 5 trust -->
+<section class="s">
+  <div class="kick">Trust</div>
+  <h2>Fluent isn't the same as right. Three guardrails:</h2>
+  <div class="rows">
+    <div class="row"><div class="i">E3</div><div><b>Every claim is cited</b><span>The summary and every answer cite numbered log lines. One click opens the exact record in the original file.</span></div></div>
+    <div class="row"><div class="i">✓</div><div><b>Claims are verified</b><span>If the model names a tool that doesn't literally appear in the log, it's dropped. It can't invent evidence.</span></div></div>
+    <div class="row"><div class="i">{{CHECKS}}</div><div><b>Known-answer tests gate every change</b><span>Six investigations with known answers, including a healthy machine that must stay quiet, run on every change to rules, prompts or the model.</span></div></div>
+  </div>
+  <p class="caught">They already caught a routine LAN login mapped to an ATT&amp;CK technique, a model suggesting "stop sshd" on a machine reached over SSH, and a scan bug that silently overwrote results.</p>
+  <div class="foot"><b>LogIngestLLM</b><span class="n">5/8</span></div>
+</section>
+
+<!-- 6 model -->
+<section class="s">
+  <div class="kick">The model</div>
+  <h2>My own model, fine-tuned on one laptop GPU</h2>
+  <div class="facts">
+    <div class="fact"><b>4B</b><span>Qwen3-4B base, QLoRA adapter</span></div>
+    <div class="fact"><b>8 GB</b><span>one laptop GPU, {{TRAIN_MIN}} min to train</span></div>
+    <div class="fact"><b>0</b><span>bytes sent to the cloud</span></div>
+  </div>
+  <div class="bars">
+    <div class="kick" style="margin:10px 0 0">Triage accuracy on held-out logs (exact importance)</div>
+    {{BARS}}
+  </div>
+  <p class="caught">New versions only go live if they beat the current one on held-out data and on the known-answer cases. Co-pilot checks: {{COPILOT}}.</p>
+  <div class="foot"><b>LogIngestLLM</b><span class="n">6/8</span></div>
+</section>
+
+<!-- 7 features -->
+<section class="s">
+  <div class="kick">For analysts and for people learning</div>
+  <h2>What else it does</h2>
+  <div class="grid">
+    <div class="tile"><div class="tag">learn</div><b>Explain this event</b><span>Field by field: logon types, status codes, what normal looks like, plus the native command to check it yourself.</span></div>
+    <div class="tile"><div class="tag">hunt</div><b>Attacker tools</b><span>Mimikatz, LinPEAS, reverse shells, certutil downloads, LSASS dumps, scanners. Each use links to its line.</span></div>
+    <div class="tile"><div class="tag">map</div><b>ATT&amp;CK by tactic</b><span>Evidence only: a routine logon is not "Valid Accounts".</span></div>
+    <div class="tile"><div class="tag">pivot</div><b>Indicators</b><span>IPs, domains, hashes, users with exact counts, pivoted across every past case.</span></div>
+    <div class="tile"><div class="tag">detect</div><b>Sigma rules</b><span>Drop in community rules; unsupported ones are skipped, never half-applied.</span></div>
+    <div class="tile"><div class="tag">report</div><b>Timeline &amp; report</b><span>One timeline across all logs; a PDF report with every citation resolved to file:line.</span></div>
+  </div>
+  <div class="foot"><b>LogIngestLLM</b><span class="n">7/8</span></div>
+</section>
+
+<!-- 8 cta -->
+<section class="s">
+  <div class="kick">Try it</div>
+  <h1>No install. No internet. <span class="acc">No account.</span></h1>
+  <p class="sub">Unzip, double-click, and the dashboard opens with example investigations ready to explore. The AI runs inside the app.</p>
+  <div class="dl">
+    <div>Windows <span>.exe · x64</span></div>
+    <div>macOS <span>Apple Silicon · Intel</span></div>
+    <div>Linux <span>x64</span></div>
+  </div>
+  <p class="cta">What should it catch next?<br><span style="color:var(--muted);font-weight:400;font-size:28px">Tell me in the comments.</span></p>
+  <p class="url">github.com/<owner>/LogIngestLLM</p>
+  <div class="foot"><b>Apache 2.0 · the LogIngestLLM authors</b><span class="n">8/8</span></div>
+</section>
+
+</body>
+</html>

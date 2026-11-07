@@ -14,7 +14,8 @@ How it is built and why. The [README](../README.md) is the user-facing guide.
 - **Two audiences.** People learning to read logs (explanations, reference, "check it yourself" commands) and SOC
   analysts (ATT&CK, indicators, pivots, Sigma, timeline, reports).
 - **Standard library only** for the analyzer. The trainer has its own virtualenv (torch, transformers, peft,
-  bitsandbytes). Even `.evtx` decoding is implemented in-house rather than pulled in as a dependency.
+  bitsandbytes). Even `.evtx` and compressed Prefetch (LZXPRESS Huffman) decoding are implemented in-house rather than pulled in
+  as dependencies.
 
 ## Pipeline
 
@@ -60,6 +61,7 @@ flowchart LR
 | `collectors/sources.py` | source specs → events; `files` type with per-file `detect_format()`; files over 100 MB are read from their newest 100 MB |
 | `collectors/textlogs.py` | syslog (RFC 3164/5424/ISO), journald JSON, app logs (text or JSON lines, tracebacks folded), web access logs (combined format) |
 | `collectors/windows.py` | live channels and exported `.xml`/`.evtx` via `wevtutil`; without it, `evtx.py`. Unrendered events get a readable message from the reference title + `Field Name: value` pairs, so rules written for Windows' rendered text match both |
+| `collectors/prefetch.py` | `.pf` reader: MAM header → LZXPRESS Huffman ([MS-XCA] 2.2; ntdll on Windows, pure Python elsewhere, cross-checked against ntdll in CI) → SCCA v17/23/26/30/31 → one event per run time |
 | `collectors/evtx.py` | stdlib `.evtx` reader: 64 KB chunks → BinXML token stream (names in the chunk string table, templates with typed substitutions) → event XML |
 | `signals.py` | built-in rules (`event_ids`, `providers`, `pattern`, `exclude`, `min_count`, `max_severity`); Linux/app rules don't apply to Windows events (they would match words inside PowerShell script blocks) |
 | `sigma.py` | Sigma support with a small YAML reader; unsupported constructs are skipped and counted, never half-applied |

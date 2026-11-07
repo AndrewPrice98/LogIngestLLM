@@ -2,8 +2,8 @@
 
 **A local-only log analyzer and analyst co-pilot that runs on a model you fine-tune yourself.**
 
-It reads Windows Event Logs (including exported `.evtx`, on any OS), Linux journald/syslog, web server and application
-logs, finds the handful of events worth your attention, explains them for people learning to read logs, and gives SOC
+It reads Windows Event Logs (including exported `.evtx`, on any OS), Windows Prefetch, Linux journald/syslog, web server
+and application logs, finds the handful of events worth your attention, explains them for people learning to read logs, and gives SOC
 analysts ATT&CK mapping, indicators, tool detection, a timeline and a cited incident report. Every claim links back to
 the exact line in the original log. Nothing leaves your machine.
 
@@ -92,6 +92,7 @@ units or channels to analyze. Edits are written to `logagent.toml` with your com
 | Source | How |
 |---|---|
 | Windows Event Log | live channels via `wevtutil`; exported `.evtx` / `.xml` anywhere (built-in `.evtx` reader on Linux/macOS) |
+| Windows Prefetch | `.pf` files or a whole copied `C:\Windows\Prefetch` folder (XP to Windows 11, compressed or not): one event per recorded run, with path, run count and loaded files |
 | Linux | systemd journal (local), syslog files (RFC 3164/5424/ISO), rotated `.gz` |
 | Web servers | Apache / nginx combined access logs (scanner user agents, status codes) |
 | Applications | text or JSON-lines logs; tracebacks and stack traces folded into one event |

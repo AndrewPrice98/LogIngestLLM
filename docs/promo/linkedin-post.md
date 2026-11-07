@@ -2,7 +2,7 @@
 
 Attach `LogIngestLLM-carousel.pdf` as a document (title it "SOC co-pilot that runs on my laptop"). Post the link in
 the first comment, not in the post (LinkedIn shows posts with external links to fewer people). Publish after the
-v0.2.0 release is live so the downloads exist.
+v0.2.1 release is live so the downloads exist.
 
 ---
 

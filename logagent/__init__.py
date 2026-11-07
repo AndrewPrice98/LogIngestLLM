@@ -1,2 +1,2 @@
 """logagent: ingest system and app logs, find the events worth your attention, summarize them."""
-__version__ = "0.2.0"
+__version__ = "0.2.1"

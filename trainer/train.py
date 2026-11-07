@@ -21,6 +21,15 @@ from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from common import BASE_MODEL, MODELS, ROOT, latest_adapter, load, read_jsonl
 
 
+def _rel(path: str) -> str:
+    """The data path relative to the repo, so train_info.json doesn't record your home folder."""
+    from pathlib import Path
+    try:
+        return Path(path).resolve().relative_to(ROOT).as_posix()
+    except ValueError:
+        return Path(path).name
+
+
 def tokenize(tok, ex: dict, max_len: int):
     msgs = ex["messages"]
     prompt = tok.apply_chat_template(msgs[:-1], add_generation_prompt=True, tokenize=False)
@@ -135,7 +144,7 @@ def main():
     tok.save_pretrained(out_dir / "adapter")
     (out_dir / "train_info.json").write_text(json.dumps({
         "base": args.base, "examples": len(data), "epochs": args.epochs, "lr": args.lr, "rank": args.rank,
-        "steps": total_steps, "minutes": round((time.time() - t0) / 60, 1), "data": args.data,
+        "steps": total_steps, "minutes": round((time.time() - t0) / 60, 1), "data": _rel(args.data),
         "resumed_from": args.resume}, indent=1))
     print(f"saved {out_dir / 'adapter'}")
 

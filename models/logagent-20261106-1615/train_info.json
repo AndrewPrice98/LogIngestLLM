@@ -6,6 +6,6 @@
  "rank": 16,
  "steps": 79,
  "minutes": 43.5,
- "data": "/home/user/Desktop/LogIngestLLM/train_data/train.jsonl",
+ "data": "train_data/train.jsonl",
  "resumed_from": null
 }

@@ -7,7 +7,6 @@ logs, finds the handful of events worth your attention, explains them for people
 analysts ATT&CK mapping, indicators, tool detection, a timeline and a cited incident report. Every claim links back to
 the exact line in the original log. Nothing leaves your machine.
 
-[![tests](https://github.com/<owner>/LogIngestLLM/actions/workflows/tests.yml/badge.svg)](https://github.com/<owner>/LogIngestLLM/actions/workflows/tests.yml)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![license](https://img.shields.io/badge/license-Apache%202.0-green)
 
@@ -15,7 +14,7 @@ the exact line in the original log. Nothing leaves your machine.
 
 ## Download (Windows, macOS, Linux)
 
-Get the app for your OS and the model files from the [latest release](https://github.com/<owner>/LogIngestLLM/releases/latest):
+Get the app for your OS and the model files from the [latest release](../../releases/latest):
 
 1. `LogIngestLLM-<version>-windows-x64.zip`, `-macos-arm64.zip` (Apple Silicon), `-macos-x64.zip` (Intel) or
    `-linux-x64.tar.gz`, unpacked anywhere.
@@ -31,7 +30,7 @@ macOS Gatekeeper ask once; `README-FIRST.txt` in the download says how to allow 
 ## Try it from source in 30 seconds
 
 ```bash
-git clone https://github.com/<owner>/LogIngestLLM && cd LogIngestLLM
+git clone <this repository's URL> LogIngestLLM && cd LogIngestLLM
 python -m logagent demo
 ```
 

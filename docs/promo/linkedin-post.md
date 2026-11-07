@@ -35,5 +35,5 @@ Code and downloads are in the first comment. What should it detect next?
 
 ## First comment
 
-Code, docs and downloads (Windows, macOS, Linux): https://github.com/<owner>/LogIngestLLM
+Code, docs and downloads (Windows, macOS, Linux): <paste the GitHub repo link>
 Built with Python's standard library, llama.cpp and Qwen3-4B (Apache 2.0). Try the five bundled example investigations first, then point it at your own logs.

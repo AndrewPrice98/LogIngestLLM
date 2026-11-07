@@ -45,7 +45,7 @@ Your settings, scans and labels are kept in {data}.
 The first AI review after starting takes a little longer while the model loads (a few seconds on a GPU, up to a
 minute on a CPU).
 
-Source, docs and issues: https://github.com/<owner>/LogIngestLLM
+Source, docs and issues: the GitHub page you downloaded this from.
 """
 START = {
     "windows": "     Double-click LogIngestLLM.exe. Windows SmartScreen may warn about an unrecognised app (it isn't\n"

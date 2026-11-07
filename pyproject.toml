@@ -10,7 +10,7 @@ readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.11"
-authors = [{ name = "the LogIngestLLM authors" }]
+authors = [{ name = "LogIngestLLM authors" }]
 keywords = ["logs", "siem", "soc", "security", "threat-hunting", "llm", "evtx", "mitre-attack", "sigma"]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -24,9 +24,6 @@ dependencies = []  # the analyzer is standard library only
 [project.optional-dependencies]
 # training / serving your own model (see README "Training your own model"); needs an NVIDIA GPU
 train = ["torch", "transformers>=4.50", "peft", "accelerate", "bitsandbytes"]
-
-[project.urls]
-Source = "https://github.com/<owner>/LogIngestLLM"
 
 [project.scripts]
 logagent = "logagent.cli:main"

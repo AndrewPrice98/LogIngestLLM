@@ -2,13 +2,13 @@
 import socket
 import sys
 import urllib.request
-import webbrowser
 from pathlib import Path
 
 if not getattr(sys, "frozen", False):  # run from a checkout: python packaging/launcher.py
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from logagent.cli import main  # noqa: E402
+from logagent.paths import open_browser  # noqa: E402
 
 PORT = 8765
 
@@ -33,8 +33,10 @@ def free(port: int) -> bool:
 if __name__ == "__main__":
     if len(sys.argv) > 1 and not sys.argv[1].startswith("-"):  # LogIngestLLM scan|eval|demo|... : the CLI
         sys.exit(main(sys.argv[1:]))
-    if running(PORT):  # already open: just show it
-        webbrowser.open(f"http://127.0.0.1:{PORT}/")
+    if running(PORT):  # already running (the tab was closed): open a new tab on it
+        url = f"http://127.0.0.1:{PORT}/"
+        print(f"LogIngestLLM is already running; opening {url}")
+        open_browser(url)
         sys.exit(0)
     port = PORT if free(PORT) else 0
     if not port:

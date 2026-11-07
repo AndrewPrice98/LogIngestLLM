@@ -45,3 +45,32 @@ def user_dir() -> Path:
 def models_dir() -> Path:
     """Trained adapters and evaluation reports (development checkout only)."""
     return REPO / "models"
+
+
+def host_env() -> dict:
+    """The environment for launching the user's own programs (browser, file manager). The packaged Linux app
+    points LD_LIBRARY_PATH at its bundled libraries, which breaks system tools: kde-open dies on the bundled
+    OpenSSL and the browser never opens. PyInstaller keeps the original value in LD_LIBRARY_PATH_ORIG."""
+    env = dict(os.environ)
+    if FROZEN and sys.platform.startswith("linux"):
+        orig = env.pop("LD_LIBRARY_PATH_ORIG", None)
+        if orig:
+            env["LD_LIBRARY_PATH"] = orig
+        else:
+            env.pop("LD_LIBRARY_PATH", None)
+    return env
+
+
+def open_browser(url: str) -> bool:
+    """Open url in the user's browser, with host_env() so a packaged app can launch it."""
+    import shutil
+    import subprocess
+    import webbrowser
+    if FROZEN and sys.platform.startswith("linux") and not os.environ.get("BROWSER") and shutil.which("xdg-open"):
+        try:
+            subprocess.Popen(["xdg-open", url], env=host_env(), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL, start_new_session=True)
+            return True
+        except OSError:
+            pass
+    return webbrowser.open(url)

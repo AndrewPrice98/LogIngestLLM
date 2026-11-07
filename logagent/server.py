@@ -8,13 +8,12 @@ import threading
 import time
 import traceback
 import urllib.request
-import webbrowser
 from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from . import __version__, engine, explain, feedback, knowledge, labelqueue, llm, locations, logview, report
+from . import __version__, engine, explain, feedback, knowledge, labelqueue, llm, locations, logview, paths, report
 from .collectors.sources import parse_window
 
 STATIC = Path(__file__).parent / "static"
@@ -387,7 +386,7 @@ def serve(cfg: dict, host: str = "127.0.0.1", port: int = 8765, open_browser: bo
     url = f"http://{'127.0.0.1' if host in ('0.0.0.0', '::') else host}:{port}/"
     print(f"LogIngestLLM dashboard on {url}  (Ctrl+C to stop)")
     if open_browser:
-        threading.Timer(0.6, lambda: webbrowser.open(url)).start()
+        threading.Timer(0.6, lambda: paths.open_browser(url)).start()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

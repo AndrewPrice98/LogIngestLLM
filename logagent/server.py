@@ -12,12 +12,13 @@ import webbrowser
 from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from . import __version__, engine, explain, feedback, knowledge, labelqueue, llm, locations, logview, report
 from .collectors.sources import parse_window
 
 STATIC = Path(__file__).parent / "static"
+MAX_UPLOAD = 4 * 2**30  # bigger logs: open them by path (Log locations → + Add / open file)
 
 
 class Job:
@@ -242,7 +243,42 @@ def make_handler(cfg: dict, job: Job, sched: dict):
                 return self._send(200, locations.discover(cfg))
             return self._send(404, {"error": "not found"})
 
+        def _upload(self):
+            """Save one log sent from the browser's file picker / drag-and-drop into data_dir/uploads, then the
+            page scans it like a picked file. octet-stream + a custom header forces a CORS preflight (which we never
+            answer), so other web pages can't push files here."""
+            if cfg.get("_allow_any_host"):
+                return self._send(403, {"error": "uploads are disabled when the dashboard is network-reachable"})
+            name = os.path.basename(unquote(self.headers.get("x-filename") or "").replace("\\", "/")).strip()
+            name = "".join(ch if ch.isalnum() or ch in "._- ()" else "_" for ch in name).strip(". ") or "upload.log"
+            try:
+                n = int(self.headers.get("content-length") or -1)
+            except ValueError:
+                n = -1
+            if n < 0:
+                return self._send(411, {"error": "content-length required"})
+            if n > MAX_UPLOAD:
+                return self._send(413, {"error": f"file is over {MAX_UPLOAD // 2**30} GB; open it by path instead"})
+            d = Path(cfg["data_dir"]) / "uploads" / f"{datetime.now():%Y%m%d-%H%M%S}-{os.urandom(2).hex()}"
+            d.mkdir(parents=True, exist_ok=True)
+            dest = d / name
+            with open(dest, "wb") as fh:
+                left = n
+                while left > 0:
+                    chunk = self.rfile.read(min(left, 1 << 20))
+                    if not chunk:
+                        break
+                    fh.write(chunk)
+                    left -= len(chunk)
+            if left:
+                dest.unlink(missing_ok=True)
+                return self._send(400, {"error": "upload was cut short"})
+            return self._send(200, {"path": str(dest.resolve()), "name": name, "bytes": n})
+
         def do_POST(self):
+            if (self._host_ok() and urlparse(self.path).path == "/api/upload" and self.headers.get("x-filename")
+                    and (self.headers.get("content-type") or "").startswith("application/octet-stream")):
+                return self._upload()
             if not self._host_ok() or "application/json" not in (self.headers.get("content-type") or ""):
                 return self._send(403, {"error": "forbidden"})
             try:

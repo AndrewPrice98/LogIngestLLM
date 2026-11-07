@@ -1221,7 +1221,7 @@ function healthOf(sum, a) {
 const VERDICT = {critical: 'CRITICAL', high: 'NEEDS ATTENTION', medium: 'MINOR ISSUES', ok: 'HEALTHY'};
 function eventLine(t, refs, scanId) {
   const m = t.match(/^((?:\d{4}-\d\d-\d\d[T ][\d:.]+Z?(?:\s*(?:\.\.|–|-|to)\s*(?:\d{4}-\d\d-\d\d[T ])?[\d:.]+Z?)?)(?:\s*UTC)?)\s*[:–-]\s*(.*)$/);
-  const when = m ? m[1].replace(/T/g, ' ') : '';
+  const when = m ? m[1].replace(/(\d)T(\d)/g, '$1 $2') : '';  // the ISO date/time separator, not the T in "UTC"
   let body = m ? m[2] : t;
   const sev = body.match(/^\[(critical|high|medium|low)\]\s*/i);
   if (sev) body = body.slice(sev[0].length);

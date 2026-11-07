@@ -103,8 +103,8 @@ flowchart LR
 ## Evaluation
 
 `evals/scenarios.json` describes investigations with known answers: a Windows intrusion, a Linux break-in, a scanned
-web server, a failing device, a healthy laptop (false-alarm guard), and optionally HTB Sherlock Campfire-1
-(Kerberoasting; bring your own copy and set `LOGAGENT_EVAL_CAMPFIRE1`).
+web server, a failing device, a healthy laptop (false-alarm guard), plus any private cases you keep
+in `evals/local/*.json` (git-ignored, for logs you can't publish).
 
 - **Deterministic** (every test run and CI): expected rules, top finding, tools with positions, indicators,
   ATT&CK techniques, "tool patterns reach the findings", and false-alarm guards (no risky tools, no ATT&CK mapping,

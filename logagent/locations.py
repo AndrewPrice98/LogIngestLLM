@@ -289,8 +289,9 @@ def _collapse(found: dict[str, list[str]]) -> dict[str, list[str]]:
             found[parent] = merged
     out: dict[str, list[str]] = {}
     for d in sorted(found, key=len):
-        anc = next((a for a in out if d.startswith(a.rstrip(os.sep) + os.sep) and
-                    d[len(a):].strip(os.sep).count(os.sep) < 2), None)
+        nd = d.replace("\\", "/")  # Windows accepts both separators; compare them as one
+        anc = next((a for a in out if nd.startswith(a.replace("\\", "/").rstrip("/") + "/") and
+                    nd[len(a):].strip("/").count("/") < 2), None)
         if anc:
             out[anc] += found[d]
         else:

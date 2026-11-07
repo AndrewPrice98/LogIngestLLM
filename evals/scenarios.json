@@ -84,25 +84,6 @@
         "max_importance": "medium",
         "summary_none": ["compromise", "attacker", "malicious", "brute.?force"]
       }
-    },
-    {
-      "name": "campfire-1-kerberoasting",
-      "about": "HTB Sherlock Campfire-1: Kerberoasting from a workstation after PowerView (bring your own copy)",
-      "files_env": "LOGAGENT_EVAL_CAMPFIRE1",
-      "files": ["Domain Controller/SECURITY-DC.evtx", "Workstation/Powershell-Operational.evtx"],
-      "expect": {
-        "rules": ["win_kerberoast"],
-        "top_rule": "win_kerberoast",
-        "tools": ["PowerSploit / PowerView"],
-        "iocs": [["ip", "172.17.79.129"]],
-        "attack": ["T1558.003"]
-      },
-      "model": {
-        "min_importance": {"win_kerberoast": "high"},
-        "summary_all": [["kerberoast", "rc4", "0x17"], ["mssqlservice"], ["alonzo"]],
-        "ask": {"q": "Was there Kerberoasting? Which account, which service, from where? Cite the events.", "min_cites": 1,
-                "all": [["mssqlservice"], ["172.17.79.129"]]}
-      }
     }
   ]
 }

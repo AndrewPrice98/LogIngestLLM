@@ -113,7 +113,7 @@ def test_detect_format_and_folder(tmp_path):
 def test_big_file_reads_newest_part(tmp_path, monkeypatch):
     from logagent.collectors import sources
     f = tmp_path / "big.log"
-    f.write_text("".join(f"2026-11-06 10:00:{i % 60:02d},1 INFO line {i}\n" for i in range(2000)))
+    f.write_bytes("".join(f"2026-11-06 10:00:{i % 60:02d},1 INFO line {i}\n" for i in range(2000)).encode())
     warns = []
     lines = list(sources._read_lines(str(f), warns.append, max_bytes=2000))
     assert warns and lines[-1].endswith("line 1999\n") and len(lines) < 100

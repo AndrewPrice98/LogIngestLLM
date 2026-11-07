@@ -31,7 +31,11 @@ def active_adapter() -> str | None:
 
 
 def load_scenarios(path: str | Path | None = None) -> dict:
-    return json.loads(Path(path or resource("evals/scenarios.json")).read_text(encoding="utf-8"))
+    spec = json.loads(Path(path or resource("evals/scenarios.json")).read_text(encoding="utf-8"))
+    if path is None:  # private cases (data you can't publish) live in evals/local/*.json, which git ignores
+        for extra in sorted(Path(resource("evals")).glob("local/*.json")):
+            spec["scenarios"] += json.loads(extra.read_text(encoding="utf-8")).get("scenarios", [])
+    return spec
 
 
 def files_for(sc: dict) -> list[str] | None:

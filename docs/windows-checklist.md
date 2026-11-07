@@ -5,7 +5,7 @@ Event Log, `wevtutil`, an admin token and a desktop). About 20 minutes. Note any
 
 | # | do | expect |
 |---|---|---|
-| 1 | `git pull`, then `python -m pytest -q` in a normal terminal | all pass (one Campfire scenario skipped unless `LOGAGENT_EVAL_CAMPFIRE1` is set) |
+| 1 | `git pull`, then `python -m pytest -q` in a normal terminal | all pass |
 | 2 | double-click **Start logagent** | model starts (if `.venv-train` exists), dashboard opens; top bar shows `privilege user (Security log skipped)` |
 | 3 | double-click it **again** while it's running | the browser opens the running dashboard; no second copy, no error |
 | 4 | close the window, then start **Start logagent (admin)** | UAC prompt; top bar shows `privilege admin` |

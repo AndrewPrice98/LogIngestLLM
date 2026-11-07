@@ -77,19 +77,6 @@ fallible. LogIngestLLM is built around that:
 <img src="docs/img/attack.png" width="49%" alt="ATT&CK by tactic">
 </p>
 
-## Example: HTB Sherlock Campfire-1 (Kerberoasting)
-
-Open the two exported logs from the challenge (`SECURITY-DC.evtx`, `Powershell-Operational.evtx`) on Linux, with no
-Windows tools needed:
-
-- **Top finding:** Kerberoasting at 2024-05-21 03:18:09 UTC: `alonzo.spire` requested an RC4 (0x17) ticket for
-  `MSSQLService` (ATT&CK T1558.003), linked to the exact record.
-- **Tools:** PowerSploit / PowerView in PowerShell script blocks on the workstation.
-- **Indicator:** the workstation at `172.17.79.129` (183 sightings), pivotable across scans.
-
-The challenge files aren't redistributed here; `evals/scenarios.json` checks this result when you point
-`LOGAGENT_EVAL_CAMPFIRE1` at your copy.
-
 ## Use it on your own logs
 
 ```bash
@@ -165,7 +152,7 @@ Triage on the same 119 held-out log patterns (exact importance level; flags = wo
 | **v2: rebalanced Linux/Windows/web data, tool-aware labels** | **91.6%** | **98.3%** | **100%** | **100%** |
 
 End to end through the built-in engine (Q4_K_M + LoRA in llama.cpp, deterministic), the known-answer evaluation passes
-109 of 110 checks across six investigations; the miss is a training-data gap (privileged-group changes) already added
+95 of 96 checks across five investigations; the miss is a training-data gap (privileged-group changes) already added
 for the next retrain. Run it yourself with `python -m logagent eval --model`.
 
 ## How it works

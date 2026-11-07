@@ -121,25 +121,25 @@ h2{font:800 58px/1.1 var(--sans);letter-spacing:-.015em}
 
 <!-- 4 case -->
 <section class="s">
-  <div class="kick">Real case · HTB Sherlock Campfire-1</div>
-  <h2>Two exported .evtx files, opened on Linux. One answer.</h2>
+  <div class="kick">Example case · the bundled Windows sample</div>
+  <h2>A break-in in one Security log. One answer, with receipts.</h2>
   <div class="case">
-    <div class="lbl">Top finding</div>
-    <div class="big"><span class="sev">HIGH</span>Kerberoasting<span class="chip">T1558.003</span></div>
+    <div class="lbl">Key finding</div>
+    <div class="big"><span class="sev">HIGH</span>LSASS memory dump<span class="chip">T1003.001</span></div>
     <div class="kv">
-      <span class="k">when</span><span class="v">2024-05-21 03:18:09 UTC<span class="cite">E1</span></span>
-      <span class="k">who</span><span class="v">alonzo.spire</span>
-      <span class="k">target</span><span class="v">MSSQLService, <em>RC4 (0x17)</em></span>
-      <span class="k">from</span><span class="v">172.17.79.129 · 183 events</span>
-      <span class="k">tool</span><span class="v">PowerView in PowerShell script blocks</span>
+      <span class="k">when</span><span class="v">2026-11-05 09:11:40 UTC<span class="cite">E2</span></span>
+      <span class="k">who</span><span class="v">mreyes on WS-FIN07</span>
+      <span class="k">how</span><span class="v">rundll32 + comsvcs.dll, <em>MiniDump</em></span>
+      <span class="k">after</span><span class="v">5 failed logons from 198.51.100.23</span>
+      <span class="k">then</span><span class="v">new admin svc_backup, log cleared</span>
     </div>
   </div>
   <div class="lbl" style="font:600 18px var(--mono);letter-spacing:.12em;color:var(--dim);margin:34px 0 12px">THE RECORD BEHIND IT · ONE CLICK FROM THE FINDING</div>
   <div class="ev">
-    <div class="evl dim"><span>03:17:31Z</span>[4771] Kerberos pre-authentication failed. Target User Name: FORELA-WKSTN001$ …</div>
-    <div class="evl hit"><span>03:18:09Z</span>[4769] A Kerberos service ticket was requested. Target User Name: <b>alonzo.spire</b>@FORELA.LOCAL
-      Service Name: <b>MSSQLService</b> Ticket Encryption Type: <em>0x17</em> Ip Address: ::ffff:<b>172.17.79.129</b></div>
-    <div class="evl dim"><span>03:18:51Z</span>[4768] A Kerberos authentication ticket (TGT) was requested. Target User Name: Administrator …</div>
+    <div class="evl dim"><span>09:09:15Z</span>[4688] New process: powershell.exe -nop -w hidden -enc SQBFAFgA… …</div>
+    <div class="evl hit"><span>09:11:40Z</span>[4688] A new process has been created. Subject: <b>mreyes</b>
+      Process: rundll32.exe Command Line: rundll32.exe C:\Windows\System32\<b>comsvcs.dll</b>, <em>MiniDump 664</em> C:\Users\Public\<b>l.dmp</b> full</div>
+    <div class="evl dim"><span>09:13:05Z</span>[4688] New process: net user svc_backup … /add …</div>
   </div>
   <div class="foot"><b>LogIngestLLM</b><span class="n">4/8</span></div>
 </section>
@@ -151,7 +151,7 @@ h2{font:800 58px/1.1 var(--sans);letter-spacing:-.015em}
   <div class="rows">
     <div class="row"><div class="i">E3</div><div><b>Every claim is cited</b><span>The summary and every answer cite numbered log lines. One click opens the exact record in the original file.</span></div></div>
     <div class="row"><div class="i">✓</div><div><b>Claims are verified</b><span>If the model names a tool that doesn't literally appear in the log, it's dropped. It can't invent evidence.</span></div></div>
-    <div class="row"><div class="i">{{CHECKS}}</div><div><b>Known-answer tests gate every change</b><span>Six investigations with known answers, including a healthy machine that must stay quiet, run on every change to rules, prompts or the model.</span></div></div>
+    <div class="row"><div class="i">{{CHECKS}}</div><div><b>Known-answer tests gate every change</b><span>Five investigations with known answers, including a healthy machine that must stay quiet, run on every change to rules, prompts or the model.</span></div></div>
   </div>
   <p class="caught">They already caught a routine LAN login mapped to an ATT&amp;CK technique, a model suggesting "stop sshd" on a machine reached over SSH, and a scan bug that silently overwrote results.</p>
   <div class="foot"><b>LogIngestLLM</b><span class="n">5/8</span></div>
@@ -200,8 +200,7 @@ h2{font:800 58px/1.1 var(--sans);letter-spacing:-.015em}
     <div>Linux <span>x64</span></div>
   </div>
   <p class="cta">What should it catch next?<br><span style="color:var(--muted);font-weight:400;font-size:28px">Tell me in the comments.</span></p>
-  <p class="url">github.com/<owner>/LogIngestLLM</p>
-  <div class="foot"><b>Apache 2.0 · the LogIngestLLM authors</b><span class="n">8/8</span></div>
+  <div class="foot"><b>Apache 2.0 · link in the comments</b><span class="n">8/8</span></div>
 </section>
 
 </body>

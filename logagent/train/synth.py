@@ -168,6 +168,24 @@ WIN_INTERESTING = [  # (provider, event id, level, data, repeat range)
     ("Microsoft-Windows-Security-Auditing", "4728", 0, lambda r, c: {"MemberName": "CN=svc_backup,CN=Users,DC=corp,DC=local",
      "TargetUserName": r.choice(["Domain Admins", "Enterprise Admins", "Schema Admins"]), "SubjectUserName": c["user"]}, (1, 1)),
 ]
+# Group adds were rare enough in v2's data that the model rated them medium; v3 adds one to ~30% of Windows host-days.
+WIN_GROUP_ADD = [  # (event id, groups, members)
+    ("4732", ["Administrators", "Remote Desktop Users", "Backup Operators", "Remote Management Users"],
+     ["-", "S-1-5-21-3623811015-3361044348-30300820-1013", "helpdesk2", "tmp_admin"]),
+    ("4728", ["Domain Admins", "Enterprise Admins", "Schema Admins", "Group Policy Creator Owners"],
+     ["CN=it.ops,CN=Users,DC=corp,DC=local", "CN=svc_sql,OU=Service,DC=corp,DC=local", "CN=k.wong,CN=Users,DC=corp,DC=local"]),
+    ("4756", ["Enterprise Admins", "Universal Admins", "Exchange Organization Administrators"],
+     ["CN=svc_deploy,OU=Service,DC=corp,DC=local", "CN=r.patel,CN=Users,DC=corp,DC=local"]),
+]
+
+
+def _group_add(rnd: random.Random, ctx: dict) -> tuple:
+    eid, groups, members = rnd.choice(WIN_GROUP_ADD)
+    group, member = rnd.choice(groups), rnd.choice(members)
+    return ("Microsoft-Windows-Security-Auditing", eid, 0,
+            lambda r, c: {"MemberName": member, "TargetUserName": group, "SubjectUserName": c["user"]}, (1, rnd.choice((1, 1, 2))))
+
+
 WIN_ROUTINE = [
     ("Microsoft-Windows-Security-Auditing", "4624", 0, lambda r, c: {"TargetUserName": "SYSTEM", "LogonType": "5",
      "IpAddress": "-", "AuthenticationPackageName": "Negotiate"}, (20, 120)),
@@ -195,6 +213,8 @@ def win_scenario(rnd: random.Random, now: datetime) -> list:
            "guess": rnd.choice(["administrator", "admin", "mreyes", "backup"])}
     evs = []
     picks = rnd.sample(WIN_INTERESTING, rnd.randint(0, 3)) + rnd.sample(WIN_ROUTINE, rnd.randint(3, 6))
+    if rnd.random() < 0.3 and not any(p[1] in ("4732", "4728", "4756") for p in picks):
+        picks.append(_group_add(rnd, ctx))
     for prov, eid, level, data_fn, (lo, hi) in picks:
         start = now - timedelta(minutes=rnd.randint(30, 1400))
         chan = "System" if prov in ("Service Control Manager", "Microsoft-Windows-DistributedCOM") else \

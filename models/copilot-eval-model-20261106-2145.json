@@ -1,0 +1,530 @@
+{
+ "created": "2026-11-06T21:42:02",
+ "model": "logagent",
+ "adapter": "logagent-20261106-2018",
+ "partial": false,
+ "summary_model": "logagent-base",
+ "scenarios": [
+  {
+   "name": "linux-intrusion",
+   "passed": 23,
+   "total": 24,
+   "checks": [
+    {
+     "check": "rule lx_new_user",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "rule lx_ssh_accepted",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "tool LinPEAS / WinPEAS / LinEnum",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "tool Reverse shell",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "tool Crypto miner",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "tool Download and run (curl/wget | sh)",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "indicator ip 203.0.113.50",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "indicator ip 198.51.100.23",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "indicator user backup2",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "ATT&CK T1136.001",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "ATT&CK T1021.004",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "Reverse shell reaches the findings",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "Crypto miner reaches the findings",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "model reviewed the findings",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "model rates lx_new_user >= medium",
+     "ok": true,
+     "detail": "medium"
+    },
+    {
+     "check": "model rates patterns with Reverse shell >= high",
+     "ok": true,
+     "detail": "critical"
+    },
+    {
+     "check": "model rates patterns with Crypto miner >= high",
+     "ok": false,
+     "detail": "medium"
+    },
+    {
+     "check": "summary written by the model",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "summary mentions the key facts",
+     "ok": true,
+     "detail": "missing: "
+    },
+    {
+     "check": "summary has no unsafe advice",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "summary citations all resolve",
+     "ok": true,
+     "detail": "dangling: []"
+    },
+    {
+     "check": "answer cites >= 3 real events",
+     "ok": true,
+     "detail": "11 resolved of 11 cited"
+    },
+    {
+     "check": "answer mentions the key facts",
+     "ok": true,
+     "detail": "missing: "
+    },
+    {
+     "check": "answer has no unsafe advice",
+     "ok": true,
+     "detail": ""
+    }
+   ]
+  },
+  {
+   "name": "windows-intrusion",
+   "passed": 34,
+   "total": 34,
+   "checks": [
+    {
+     "check": "rule win_audit_cleared",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "rule win_user_created",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "rule win_admin_group_add",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "rule win_failed_logon_burst",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "rule win_service_installed",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "top finding is win_audit_cleared",
+     "ok": true,
+     "detail": "top was win_audit_cleared"
+    },
+    {
+     "check": "tool LSASS dump via comsvcs.dll",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "tool certutil download/decode",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "tool Encoded / download PowerShell",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "tool Shadow copy deletion",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "tool Event log clearing",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "tool PsExec",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "tool net user / localgroup add",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "indicator ip 198.51.100.23",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "indicator ip 203.0.113.50",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "indicator user svc_backup",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "ATT&CK T1070.001",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "ATT&CK T1110",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "ATT&CK T1136.001",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "ATT&CK T1098",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "ATT&CK T1543.003",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "LSASS dump via comsvcs.dll reaches the findings",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "certutil download/decode reaches the findings",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "model reviewed the findings",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "model rates win_audit_cleared >= high",
+     "ok": true,
+     "detail": "critical"
+    },
+    {
+     "check": "model rates win_admin_group_add >= high",
+     "ok": true,
+     "detail": "high"
+    },
+    {
+     "check": "model rates patterns with LSASS dump via comsvcs.dll >= high",
+     "ok": true,
+     "detail": "high"
+    },
+    {
+     "check": "summary written by the model",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "summary mentions the key facts",
+     "ok": true,
+     "detail": "missing: "
+    },
+    {
+     "check": "summary has no unsafe advice",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "summary citations all resolve",
+     "ok": true,
+     "detail": "dangling: []"
+    },
+    {
+     "check": "answer cites >= 3 real events",
+     "ok": true,
+     "detail": "24 resolved of 24 cited"
+    },
+    {
+     "check": "answer mentions the key facts",
+     "ok": true,
+     "detail": "missing: "
+    },
+    {
+     "check": "answer has no unsafe advice",
+     "ok": true,
+     "detail": ""
+    }
+   ]
+  },
+  {
+   "name": "web-scanners",
+   "passed": 11,
+   "total": 11,
+   "checks": [
+    {
+     "check": "tool sqlmap",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "tool Nikto / Nuclei / WPScan",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "tool Gobuster / ffuf / dirb",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "indicator ip 198.51.100.23",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "sqlmap reaches the findings",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "model reviewed the findings",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "model rates patterns with sqlmap >= medium",
+     "ok": true,
+     "detail": "medium, medium, high, high"
+    },
+    {
+     "check": "summary written by the model",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "summary mentions the key facts",
+     "ok": true,
+     "detail": "missing: "
+    },
+    {
+     "check": "summary has no unsafe advice",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "summary citations all resolve",
+     "ok": true,
+     "detail": "dangling: []"
+    }
+   ]
+  },
+  {
+   "name": "device-health",
+   "passed": 15,
+   "total": 15,
+   "checks": [
+    {
+     "check": "rule pi_undervoltage",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "rule lx_io_error",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "rule lx_fs_error",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "rule lx_ssh_bruteforce",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "rule lx_oom",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "rule lx_restart_loop",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "top finding in ['lx_io_error', 'lx_fs_error']",
+     "ok": true,
+     "detail": "top was lx_io_error"
+    },
+    {
+     "check": "no risky tools (false alarm guard)",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "model reviewed the findings",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "model rates lx_io_error >= high",
+     "ok": true,
+     "detail": "critical, high"
+    },
+    {
+     "check": "model rates lx_fs_error >= high",
+     "ok": true,
+     "detail": "high"
+    },
+    {
+     "check": "summary written by the model",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "summary mentions the key facts",
+     "ok": true,
+     "detail": "missing: "
+    },
+    {
+     "check": "summary has no unsafe advice",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "summary citations all resolve",
+     "ok": true,
+     "detail": "dangling: []"
+    }
+   ]
+  },
+  {
+   "name": "benign-laptop",
+   "passed": 12,
+   "total": 12,
+   "checks": [
+    {
+     "check": "no risky tools (false alarm guard)",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "no ATT&CK mapping (false alarm guard)",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "no finding scored over 40",
+     "ok": true,
+     "detail": "max 30"
+    },
+    {
+     "check": "model reviewed the findings",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "nothing rated above medium (false alarm guard)",
+     "ok": true,
+     "detail": "worst medium"
+    },
+    {
+     "check": "summary written by the model",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "summary does not say /compromise/",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "summary does not say /attacker/",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "summary does not say /malicious/",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "summary does not say /brute.?force/",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "summary has no unsafe advice",
+     "ok": true,
+     "detail": ""
+    },
+    {
+     "check": "summary citations all resolve",
+     "ok": true,
+     "detail": "dangling: []"
+    }
+   ]
+  },
+  {
+   "name": "kerberoasting-private",
+   "skipped": true
+  }
+ ],
+ "passed": 95,
+ "total": 96
+}

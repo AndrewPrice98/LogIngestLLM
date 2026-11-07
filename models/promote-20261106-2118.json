@@ -1,0 +1,70 @@
+{
+ "created": "2026-11-06T21:18:02",
+ "decided_on": "all",
+ "candidate": "models/logagent-20261106-2018/adapter",
+ "candidate_quality": 0.9507,
+ "candidate_report": {
+  "all": {
+   "n": 119,
+   "valid_json": 1.0,
+   "exact": 0.908,
+   "within_one_level": 0.992,
+   "flag_precision": 1.0,
+   "flag_recall": 0.989
+  },
+  "synthetic": {
+   "n": 119,
+   "valid_json": 1.0,
+   "exact": 0.908,
+   "within_one_level": 0.992,
+   "flag_precision": 1.0,
+   "flag_recall": 0.989
+  },
+  "confusion(gold->pred)": {
+   "critical->critical": 10,
+   "critical->high": 5,
+   "high->high": 29,
+   "high->medium": 1,
+   "low->low": 14,
+   "medium->high": 3,
+   "medium->low": 1,
+   "medium->medium": 25,
+   "medium->noise": 1,
+   "noise->noise": 30
+  }
+ },
+ "current": "models/logagent-20261106-1615/adapter",
+ "current_quality": 0.9297,
+ "current_report": {
+  "all": {
+   "n": 119,
+   "valid_json": 1.0,
+   "exact": 0.866,
+   "within_one_level": 0.992,
+   "flag_precision": 1.0,
+   "flag_recall": 0.989
+  },
+  "synthetic": {
+   "n": 119,
+   "valid_json": 1.0,
+   "exact": 0.866,
+   "within_one_level": 0.992,
+   "flag_precision": 1.0,
+   "flag_recall": 0.989
+  },
+  "confusion(gold->pred)": {
+   "critical->critical": 11,
+   "critical->high": 4,
+   "high->critical": 2,
+   "high->high": 26,
+   "high->medium": 2,
+   "low->low": 8,
+   "low->medium": 6,
+   "medium->high": 1,
+   "medium->medium": 28,
+   "medium->noise": 1,
+   "noise->noise": 30
+  }
+ },
+ "promoted": true
+}

@@ -1,0 +1,11 @@
+{
+ "base": "Qwen/Qwen3-4B-Instruct-2507",
+ "examples": 3286,
+ "epochs": 1.0,
+ "lr": 0.0002,
+ "rank": 16,
+ "steps": 78,
+ "minutes": 43.0,
+ "data": "train_data/train.jsonl",
+ "resumed_from": null
+}

@@ -37,17 +37,28 @@ def main():
     ap.add_argument("--copilot", help="override the co-pilot checks line, e.g. 'v1 103/108 → v2 109/110'")
     a = ap.parse_args()
     promo = latest("promote-*.json") or {}
-    base = json.loads((MODELS / "eval-base.json").read_text()) if (MODELS / "eval-base.json").exists() else None
-    cur, cand = (promo.get("current_report") or {}).get("all", {}), (promo.get("candidate_report") or {}).get("all", {})
-    names = [(promo.get("current") or "v1").split("/")[1] if promo.get("current") else "v1",
-             (promo.get("candidate") or "v2").split("/")[1] if promo.get("candidate") else "v2"]
+    # Every bar comes from the same held-out set as the latest promotion (same example count), so they compare fairly.
+    n = ((promo.get("candidate_report") or {}).get("all") or {}).get("n")
+    versions = sorted(d.name for d in MODELS.glob("logagent-*") if d.is_dir())
+    exact = {}
+    for f in MODELS.glob("eval-*.json"):
+        r = json.loads(f.read_text())["report"]["all"]
+        if r.get("n") == n:
+            exact[f.stem[5:]] = r["exact"]
+    for side in ("current", "candidate"):
+        if promo.get(side):
+            exact[promo[side].split("/")[1]] = promo[f"{side}_report"]["all"]["exact"]
+    notes = ["rules + synthetic data", "rebalanced, tool-aware data", "+ privileged-group coverage"]
     bars = []
-    if base:
-        bars.append(bar("Base model, no fine-tune", base["report"]["all"]["exact"], "var(--line2)"))
-    if cur:
-        bars.append(bar("v1: rules + synthetic data", cur["exact"], "var(--accent2)"))
-    if cand:
-        bars.append(bar("v2: rebalanced, tool-aware data", cand["exact"], "var(--accent)"))
+    if "base" in exact:
+        bars.append(bar("Base model, no fine-tune", exact["base"], "var(--dim)"))
+    shown = [v for v in versions if v in exact]
+    for i, v in enumerate(versions):
+        if v in exact:
+            last = v == shown[-1]
+            bars.append(bar(f"v{i + 1}: {notes[i] if i < len(notes) else 'retrained'}", exact[v],
+                            "var(--accent)" if last else "var(--muted)"))
+    names = ["", versions[-1] if versions else ""]
     reports = {}
     for p in sorted(MODELS.glob("copilot-eval-model-*.json")):
         r = json.loads(p.read_text())

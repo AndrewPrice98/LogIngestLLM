@@ -1,41 +1,37 @@
 {
  "adapter": "models/logagent-20261106-1138/adapter",
- "data": "train_data/eval.jsonl",
- "n": 150,
  "report": {
   "all": {
    "n": 119,
-   "valid_json": 1.0,
-   "exact": 0.672,
-   "within_one_level": 0.857,
-   "flag_precision": 0.987,
+   "valid_json": 0.983,
+   "exact": 0.639,
+   "within_one_level": 0.882,
+   "flag_precision": 1.0,
    "flag_recall": 0.854
   },
   "synthetic": {
    "n": 119,
-   "valid_json": 1.0,
-   "exact": 0.672,
-   "within_one_level": 0.857,
-   "flag_precision": 0.987,
+   "valid_json": 0.983,
+   "exact": 0.639,
+   "within_one_level": 0.882,
+   "flag_precision": 1.0,
    "flag_recall": 0.854
   },
   "confusion(gold->pred)": {
-   "critical->critical": 9,
-   "critical->high": 5,
+   "critical->critical": 4,
+   "critical->high": 10,
    "critical->medium": 1,
-   "high->high": 23,
-   "high->low": 2,
+   "high->high": 25,
    "high->medium": 4,
    "high->noise": 1,
-   "low->low": 5,
-   "low->medium": 1,
-   "low->noise": 8,
-   "medium->high": 9,
-   "medium->low": 3,
-   "medium->medium": 14,
+   "low->low": 8,
+   "low->noise": 6,
+   "medium->high": 4,
+   "medium->invalid": 2,
+   "medium->low": 11,
+   "medium->medium": 9,
    "medium->noise": 4,
-   "noise->low": 1,
-   "noise->noise": 29
+   "noise->noise": 30
   }
  }
 }
